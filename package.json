@@ -1,0 +1,18 @@
+{
+  "name": "stremio-trakt-sync",
+  "version": "1.0.0",
+  "description": "Serverless Stremio & Nuvio Trakt Multi-Device Sync Addon on Cloudflare Workers",
+  "main": "worker.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^3.80.0"
+  },
+  "keywords": ["stremio", "nuvio", "trakt", "simkl", "cloudflare-workers", "addon", "scrobble"],
+  "author": "Anurag Nepal",
+  "license": "MIT"
+}
