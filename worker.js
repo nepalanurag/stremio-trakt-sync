@@ -160,12 +160,17 @@ function buildManifest(config) {
 
   return {
     id: 'org.multisync.stremio',
-    version: '2.5.3',
+    version: '2.5.4',
     name: 'MultiSync (Trakt & Simkl)',
     description: 'Syncs Trakt and Simkl Watchlists, Continue Watching, and History to Stremio and Nuvio across all devices without account logouts.',
     logo: 'https://raw.githubusercontent.com/nepalanurag/stremio-trakt-sync/main/icon.svg',
     background: 'https://images.metahub.space/background/medium/tt0903747/img',
-    resources: ['catalog', 'subtitles'],
+    resources: [
+      'catalog',
+      'subtitles',
+      { name: 'player', types: ['movie', 'series'], idPrefixes: ['tt', 'trakt', 'simkl'] },
+      { name: 'library', types: ['movie', 'series'], idPrefixes: ['tt', 'trakt', 'simkl'] }
+    ],
     types: ['movie', 'series'],
     idPrefixes: ['tt', 'trakt', 'simkl'],
     catalogs,
@@ -210,9 +215,22 @@ function parseConfig(segment) {
 }
 
 function parseMediaId(type, idWithExt) {
-  const rawId = idWithExt.replace(/\.json$/, '');
-  if (type === 'movie') return { type: 'movie', imdbId: rawId };
+  if (!idWithExt) return { type: type || 'movie', imdbId: '' };
+  const rawId = decodeURIComponent(idWithExt.replace(/\.json$/, ''));
+  if (type === 'movie') {
+    if (rawId.startsWith('trakt:')) return { type: 'movie', traktId: rawId.replace('trakt:', '') };
+    if (rawId.startsWith('simkl:')) return { type: 'movie', simklId: rawId.replace('simkl:', '') };
+    return { type: 'movie', imdbId: rawId };
+  }
   const parts = rawId.split(':');
+  if (parts[0] === 'trakt' && parts.length >= 3) {
+    return {
+      type: 'series',
+      traktId: parts[1],
+      season: parseInt(parts[2], 10),
+      episode: parseInt(parts[3], 10)
+    };
+  }
   if (parts.length >= 3) {
     return {
       type: 'series',
@@ -221,6 +239,8 @@ function parseMediaId(type, idWithExt) {
       episode: parseInt(parts[2], 10)
     };
   }
+  if (rawId.startsWith('trakt:')) return { type: 'series', traktId: rawId.replace('trakt:', '') };
+  if (rawId.startsWith('simkl:')) return { type: 'series', simklId: rawId.replace('simkl:', '') };
   return { type: 'series', imdbId: rawId };
 }
 
@@ -309,22 +329,145 @@ function mapSimklToMeta(item, type) {
   };
 }
 
-async function syncToTrakt(media, token, clientId) {
-  if (!media.imdbId || !media.imdbId.startsWith('tt')) return;
+function buildSyncPayload(mediaOrList) {
+  const list = Array.isArray(mediaOrList) ? mediaOrList : [mediaOrList];
+  const movies = [];
+  const showsMap = new Map();
+
+  for (const media of list) {
+    if (!media) continue;
+    const ids = {};
+    if (media.imdbId && media.imdbId.startsWith('tt')) ids.imdb = media.imdbId;
+    if (media.traktId) ids.trakt = parseInt(media.traktId, 10) || media.traktId;
+    if (media.simklId) ids.simkl = parseInt(media.simklId, 10) || media.simklId;
+    if (Object.keys(ids).length === 0) continue;
+
+    if (media.type === 'movie') {
+      movies.push({ ids });
+    } else {
+      const showKey = ids.imdb || ids.trakt || ids.simkl;
+      if (!showsMap.has(showKey)) {
+        showsMap.set(showKey, { ids, seasons: new Map() });
+      }
+      const showEntry = showsMap.get(showKey);
+      if (media.season !== undefined && media.episode !== undefined) {
+        if (!showEntry.seasons.has(media.season)) {
+          showEntry.seasons.set(media.season, new Set());
+        }
+        showEntry.seasons.get(media.season).add(media.episode);
+      }
+    }
+  }
+
+  const payload = {};
+  if (movies.length > 0) payload.movies = movies;
+  if (showsMap.size > 0) {
+    payload.shows = [];
+    for (const [, entry] of showsMap.entries()) {
+      if (entry.seasons.size === 0) {
+        payload.shows.push({ ids: entry.ids });
+      } else {
+        const seasons = [];
+        for (const [seasonNum, epSet] of entry.seasons.entries()) {
+          seasons.push({
+            number: seasonNum,
+            episodes: Array.from(epSet).map(num => ({ number: num }))
+          });
+        }
+        payload.shows.push({
+          ids: entry.ids,
+          seasons
+        });
+      }
+    }
+  }
+
+  return (payload.movies || payload.shows) ? payload : null;
+}
+
+async function scrobbleTrakt(media, action, progress, token, clientId) {
+  if (!token || !clientId || !media) return;
+  const ids = {};
+  if (media.imdbId && media.imdbId.startsWith('tt')) ids.imdb = media.imdbId;
+  if (media.traktId) ids.trakt = parseInt(media.traktId, 10) || media.traktId;
+  if (Object.keys(ids).length === 0) return;
+
+  const validProgress = Math.min(100, Math.max(0, Math.round(Number(progress) * 10) / 10));
+
   let payload = null;
   if (media.type === 'movie') {
-    payload = { movies: [{ ids: { imdb: media.imdbId } }] };
+    payload = {
+      movie: { ids },
+      progress: validProgress
+    };
   } else if (media.season !== undefined && media.episode !== undefined) {
     payload = {
-      shows: [{
-        ids: { imdb: media.imdbId },
-        seasons: [{
-          number: media.season,
-          episodes: [{ number: media.episode }]
-        }]
-      }]
+      show: { ids },
+      episode: { season: media.season, number: media.episode },
+      progress: validProgress
     };
   }
+  if (!payload) return;
+
+  const validAction = (action === 'start' || action === 'pause' || action === 'stop') ? action : 'start';
+  await fetch(`${TRAKT_API_URL}/scrobble/${validAction}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'User-Agent': USER_AGENT,
+      'trakt-api-version': '2',
+      'trakt-api-key': clientId,
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  }).catch(() => {});
+}
+
+async function scrobbleSimkl(media, action, progress, token, clientId) {
+  if (!token || !media) return;
+  const ids = {};
+  if (media.imdbId && media.imdbId.startsWith('tt')) ids.imdb = media.imdbId;
+  if (media.simklId) ids.simkl = parseInt(media.simklId, 10) || media.simklId;
+  if (Object.keys(ids).length === 0) return;
+
+  const validProgress = Math.min(100, Math.max(0, Math.round(Number(progress) * 10) / 10));
+
+  let payload = null;
+  if (media.type === 'movie') {
+    payload = {
+      movie: { ids },
+      progress: validProgress
+    };
+  } else if (media.season !== undefined && media.episode !== undefined) {
+    payload = {
+      show: { ids },
+      episode: { season: media.season, number: media.episode },
+      progress: validProgress
+    };
+  }
+  if (!payload) return;
+
+  const validAction = (action === 'start' || action === 'pause' || action === 'stop') ? action : 'start';
+  const queryParam = clientId ? `?client_id=${encodeURIComponent(clientId)}` : '';
+  const headers = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    'User-Agent': USER_AGENT,
+    'Authorization': `Bearer ${token}`
+  };
+  if (clientId) headers['simkl-api-key'] = clientId;
+
+  await fetch(`${SIMKL_API_URL}/scrobble/${validAction}${queryParam}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload)
+  }).catch(() => {});
+}
+
+async function markWatchedTrakt(mediaOrList, token, clientId) {
+  if (!token || !clientId) return;
+  const payload = buildSyncPayload(mediaOrList);
   if (!payload) return;
 
   await fetch(`${TRAKT_API_URL}/sync/history`, {
@@ -338,37 +481,66 @@ async function syncToTrakt(media, token, clientId) {
       'Authorization': `Bearer ${token}`
     },
     body: JSON.stringify(payload)
-  });
+  }).catch(() => {});
 }
 
-async function syncToSimkl(media, token) {
-  if (!media.imdbId || !media.imdbId.startsWith('tt')) return;
-  let payload = null;
-  if (media.type === 'movie') {
-    payload = { movies: [{ ids: { imdb: media.imdbId } }] };
-  } else if (media.season !== undefined && media.episode !== undefined) {
-    payload = {
-      shows: [{
-        ids: { imdb: media.imdbId },
-        seasons: [{
-          number: media.season,
-          episodes: [{ number: media.episode }]
-        }]
-      }]
-    };
-  }
+async function markUnwatchedTrakt(mediaOrList, token, clientId) {
+  if (!token || !clientId) return;
+  const payload = buildSyncPayload(mediaOrList);
   if (!payload) return;
 
-  await fetch(`${SIMKL_API_URL}/sync/history`, {
+  await fetch(`${TRAKT_API_URL}/sync/history/remove`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'User-Agent': USER_AGENT,
+      'trakt-api-version': '2',
+      'trakt-api-key': clientId,
       'Authorization': `Bearer ${token}`
     },
     body: JSON.stringify(payload)
-  });
+  }).catch(() => {});
+}
+
+async function markWatchedSimkl(mediaOrList, token, clientId) {
+  if (!token) return;
+  const payload = buildSyncPayload(mediaOrList);
+  if (!payload) return;
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    'User-Agent': USER_AGENT,
+    'Authorization': `Bearer ${token}`
+  };
+  if (clientId) headers['simkl-api-key'] = clientId;
+
+  await fetch(`${SIMKL_API_URL}/sync/history`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload)
+  }).catch(() => {});
+}
+
+async function markUnwatchedSimkl(mediaOrList, token, clientId) {
+  if (!token) return;
+  const payload = buildSyncPayload(mediaOrList);
+  if (!payload) return;
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    'User-Agent': USER_AGENT,
+    'Authorization': `Bearer ${token}`
+  };
+  if (clientId) headers['simkl-api-key'] = clientId;
+
+  await fetch(`${SIMKL_API_URL}/sync/history/remove`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload)
+  }).catch(() => {});
 }
 
 async function handleCatalog(catalogId, type, extraSegment, config, defaultClientId, simklClientId) {
@@ -1040,7 +1212,7 @@ export default {
         <div>
           <div class="brand-title">
             MultiSync
-            <span class="brand-badge">v2.5.0</span>
+            <span class="brand-badge">v2.5.4</span>
           </div>
           <div class="brand-sub">Trakt & Simkl Multi-Device Sync for Stremio & Nuvio</div>
         </div>
@@ -1182,24 +1354,24 @@ export default {
         <div id="tabContentSync" style="display:none;">
           <div class="sync-row">
             <div class="sync-meta">
-              <h4>Real-time Movie Scrobbling</h4>
-              <p>Syncs movie watch progress automatically upon starting playback.</p>
+              <h4>Smart Watched History Threshold</h4>
+              <p>Only marks items as watched in history when you finish watching (progress &ge; 80%) or explicitly toggle watched.</p>
             </div>
             <span style="color:#10b981; font-weight:700; font-size:0.85rem;">Active</span>
           </div>
           <div class="sync-row">
             <div class="sync-meta">
-              <h4>Real-time TV Series Scrobbling</h4>
-              <p>Syncs exact season and episode progress to Trakt and Simkl.</p>
+              <h4>Continue Watching & Resume Markers</h4>
+              <p>Playback start and pause events update Trakt & Simkl resume points without polluting watched history.</p>
             </div>
             <span style="color:#10b981; font-weight:700; font-size:0.85rem;">Active</span>
           </div>
           <div class="sync-row">
             <div class="sync-meta">
-              <h4>15-Minute Scrobble Debounce</h4>
-              <p>Prevents redundant history updates during scrubbing or restarts.</p>
+              <h4>Two-Way Library Action Sync</h4>
+              <p>Explicit mark-as-watched and unmark actions from Nuvio sync immediately across both Trakt and Simkl.</p>
             </div>
-            <span style="color:#38bdf8; font-weight:700; font-size:0.85rem;">Protected</span>
+            <span style="color:#38bdf8; font-weight:700; font-size:0.85rem;">Synchronized</span>
           </div>
         </div>
 
@@ -1928,14 +2100,14 @@ export default {
         return jsonResponse(buildManifest(config));
       }
 
-      // Subtitles Hook (Dynamic Scrobbler on Playback Start)
+      // Subtitles Hook (Dynamic Scrobbler on Playback Start - Sets Watching Now, NEVER marks as completed)
       if (routeParts[0] === 'subtitles' && routeParts.length >= 3) {
         const type = routeParts[1];
         const idWithExt = routeParts[2];
         const media = parseMediaId(type, idWithExt);
 
-        if (config && media.imdbId) {
-          const syncKey = `${media.type}:${media.imdbId}:${media.season || 0}:${media.episode || 0}`;
+        if (config && (media.imdbId || media.traktId || media.simklId)) {
+          const syncKey = `sub:${media.type}:${media.imdbId || media.traktId || media.simklId}:${media.season || 0}:${media.episode || 0}`;
           if (shouldSync(syncKey)) {
             const token = config.traktToken || config.token;
             const clientId = config.traktClientId || config.clientId || traktClientId;
@@ -1943,10 +2115,10 @@ export default {
             if (ctx && ctx.waitUntil) {
               ctx.waitUntil((async () => {
                 if (token && clientId) {
-                  await syncToTrakt(media, token, clientId).catch(() => {});
+                  await scrobbleTrakt(media, 'start', 1.0, token, clientId);
                 }
                 if (config.simklToken) {
-                  await syncToSimkl(media, config.simklToken).catch(() => {});
+                  await scrobbleSimkl(media, 'start', 0.0, config.simklToken, simklClientId);
                 }
               })());
             }
@@ -1954,6 +2126,96 @@ export default {
         }
 
         return jsonResponse({ subtitles: [] });
+      }
+
+      // Player Event Dispatcher (Real-time Playback Tracking: start, pause, stop)
+      if (routeParts[0] === 'player' && routeParts.length >= 3) {
+        const type = routeParts[1];
+        const rawId = decodeURIComponent((routeParts[2] || '').replace(/\.json$/, ''));
+        const rawExtra = routeParts[3] ? decodeURIComponent(routeParts[3].replace(/\.json$/, '')) : '';
+        const extraParams = new URLSearchParams(rawExtra);
+
+        const action = (extraParams.get('action') || url.searchParams.get('action') || 'stop').toLowerCase();
+        const currentTime = parseFloat(extraParams.get('currentTime') || url.searchParams.get('currentTime') || '0');
+        const duration = parseFloat(extraParams.get('duration') || url.searchParams.get('duration') || '0');
+        const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+        const media = parseMediaId(type, rawId);
+
+        if (config && (media.imdbId || media.traktId || media.simklId)) {
+          const token = config.traktToken || config.token;
+          const clientId = config.traktClientId || config.clientId || traktClientId;
+          const simklToken = config.simklToken;
+
+          if (ctx && ctx.waitUntil) {
+            ctx.waitUntil((async () => {
+              if (action === 'start') {
+                if (token && clientId) await scrobbleTrakt(media, 'start', Math.max(progress, 1.0), token, clientId);
+                if (simklToken) await scrobbleSimkl(media, 'start', progress, simklToken, simklClientId);
+              } else if (action === 'pause') {
+                if (token && clientId) await scrobbleTrakt(media, 'pause', progress, token, clientId);
+                if (simklToken) await scrobbleSimkl(media, 'pause', progress, simklToken, simklClientId);
+              } else if (action === 'stop') {
+                // If progress >= 80%, user finished watching! Mark as completed in history.
+                if (progress >= 80) {
+                  if (token && clientId) {
+                    await scrobbleTrakt(media, 'stop', progress, token, clientId);
+                    await markWatchedTrakt(media, token, clientId);
+                  }
+                  if (simklToken) {
+                    await scrobbleSimkl(media, 'stop', progress, simklToken, simklClientId);
+                    await markWatchedSimkl(media, simklToken, simklClientId);
+                  }
+                } else {
+                  // User stopped before finishing: update resume point in Continue Watching without adding to completed history.
+                  if (token && clientId) await scrobbleTrakt(media, 'stop', progress, token, clientId);
+                  if (simklToken) await scrobbleSimkl(media, 'stop', progress, simklToken, simklClientId);
+                }
+              }
+            })());
+          }
+        }
+
+        return jsonResponse({ success: true });
+      }
+
+      // Library Action Dispatcher (Explicit watched / unwatched toggles)
+      if (routeParts[0] === 'library' && routeParts.length >= 3) {
+        const type = routeParts[1];
+        const rawId = decodeURIComponent((routeParts[2] || '').replace(/\.json$/, ''));
+        const rawExtra = routeParts[3] ? decodeURIComponent(routeParts[3].replace(/\.json$/, '')) : '';
+        const extraParams = new URLSearchParams(rawExtra);
+
+        const action = (extraParams.get('action') || url.searchParams.get('action') || '').toLowerCase();
+        const videoIdParam = extraParams.get('videoId') || url.searchParams.get('videoId') || '';
+
+        let targetMediaList = [];
+        if (videoIdParam) {
+          const videoIds = videoIdParam.split(',').map(s => decodeURIComponent(s.trim())).filter(Boolean);
+          targetMediaList = videoIds.map(vid => parseMediaId(type, vid));
+        } else {
+          targetMediaList = [parseMediaId(type, rawId)];
+        }
+
+        if (config && targetMediaList.length > 0) {
+          const token = config.traktToken || config.token;
+          const clientId = config.traktClientId || config.clientId || traktClientId;
+          const simklToken = config.simklToken;
+
+          if (ctx && ctx.waitUntil) {
+            ctx.waitUntil((async () => {
+              if (action === 'watched') {
+                if (token && clientId) await markWatchedTrakt(targetMediaList, token, clientId);
+                if (simklToken) await markWatchedSimkl(targetMediaList, simklToken, simklClientId);
+              } else if (action === 'unwatched') {
+                if (token && clientId) await markUnwatchedTrakt(targetMediaList, token, clientId);
+                if (simklToken) await markUnwatchedSimkl(targetMediaList, simklToken, simklClientId);
+              }
+            })());
+          }
+        }
+
+        return jsonResponse({ success: true });
       }
 
       // Catalogs (with Cloudflare Edge Cache)
