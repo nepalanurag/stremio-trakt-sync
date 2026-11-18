@@ -7,6 +7,22 @@ const SIMKL_API_URL = 'https://api.simkl.com';
 
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
+const CONFIG_FILE = 'config.json';
+
+const syncDebounceCache = new Map();
+function shouldSync(key) {
+  const now = Date.now();
+  const last = syncDebounceCache.get(key) || 0;
+  if (now - last < 15 * 60 * 1000) return false;
+  syncDebounceCache.set(key, now);
+  if (syncDebounceCache.size > 2000) {
+    for (const [k, v] of syncDebounceCache.entries()) {
+      if (now - v > 30 * 60 * 1000) syncDebounceCache.delete(k);
+    }
+  }
+  return true;
+}
+
 const GENRE_OPTIONS = [
   'Action', 'Adventure', 'Animation', 'Comedy', 'Crime',
   'Documentary', 'Drama', 'Family', 'Fantasy', 'History',
@@ -437,6 +453,8 @@ export default {
     try {
       const traktClientId = (env?.TRAKT_CLIENT_ID || DEFAULT_TRAKT_CLIENT_ID || '').trim();
       const simklClientId = (env?.SIMKL_CLIENT_ID || '').trim();
+      const accessPassword = (env?.ACCESS_PASSWORD || '').trim();
+      const allowedUsers = (env?.ALLOWED_USERS || '').trim().toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
 
       const url = new URL(request.url);
       const pathname = url.pathname;
@@ -473,80 +491,123 @@ export default {
 </head>
 <body>
   <div class="card">
-    <h1>Trakt Multi-Device Sync</h1>
-    <p>Connect Trakt once. Sync playback and catalogs across 5+ Stremio and Nuvio devices without ever getting logged out.</p>
-
-    <!-- Trakt Section -->
-    <div class="section">
-      <div class="section-title">
-        <span>1. Trakt Account</span>
-        <span id="traktBadge" style="font-size:0.8rem; color:#94a3b8;">Not Connected</span>
-      </div>
-
-      <div id="traktInitial">
-        <button id="btnTrakt" class="btn" onclick="startTrakt()">Tap to Connect Trakt</button>
-      </div>
-
-      <div id="traktCodeBox" class="code-box" style="display:none;">
-        <p style="margin:0 0 0.25rem 0; font-size:0.85rem; color:#cbd5e1;">Your activation code:</p>
-        <div id="traktUserCode" class="user-code">----</div>
-        <a id="traktActivateLink" class="btn btn-outline" href="https://auth.trakt.tv/activate" target="_blank">1. Open Trakt Activate in New Tab</a>
-        <button class="btn btn-outline" style="border-color:#64748b; color:#cbd5e1; margin-top:0.4rem;" onclick="copyCode()">2. Copy Code to Clipboard</button>
-        <p id="traktPollStatus" class="status-text">Waiting for you to tap Yes on Trakt...</p>
-      </div>
-
-      <div id="traktConnected" class="badge-success" style="display:none;">
-        Connected to Trakt: <span id="traktUser" style="color:#fff;"></span>
-      </div>
+    <!-- Master Passcode Lock Section (shown only if ACCESS_PASSWORD is configured) -->
+    <div id="lockSection" style="display:none; text-align:center; padding:1.5rem 0;">
+      <div style="font-size:2.5rem; margin-bottom:0.5rem;">🔒</div>
+      <h2 style="color:#38bdf8; margin:0 0 0.5rem 0; font-size:1.3rem;">Private Addon Instance</h2>
+      <p style="font-size:0.85rem; color:#94a3b8; margin:0 0 1rem 0;">This instance is protected with a master passcode. Enter your ACCESS_PASSWORD to configure.</p>
+      <input id="passInput" type="password" placeholder="Enter Access Password" style="max-width:320px; margin:0 auto 0.75rem auto; text-align:center;">
+      <button class="btn" style="max-width:320px; margin:0 auto;" onclick="unlockDashboard()">Unlock Configuration</button>
     </div>
 
-    <!-- Simkl Section -->
-    <div class="section">
-      <div class="section-title">
-        <span>2. Simkl (Optional)</span>
-        <span id="simklBadge" style="font-size:0.8rem; color:#94a3b8;">Optional</span>
-      </div>
-      <p style="font-size:0.85rem; margin:0 0 0.5rem 0;">Cross-syncs playback and watchlists with Simkl.</p>
-      <div id="simklBtnWrap">
-        <button id="btnSimkl" class="btn btn-outline" style="border-color:#38bdf8; color:#38bdf8;" onclick="startSimkl()">Tap to Connect Simkl</button>
+    <div id="mainDashboard">
+      <h1>Trakt Multi-Device Sync</h1>
+      <p>Connect Trakt once. Sync playback and catalogs across 5+ Stremio and Nuvio devices without ever getting logged out.</p>
+
+      <!-- Trakt Section -->
+      <div class="section">
+        <div class="section-title">
+          <span>1. Trakt Account</span>
+          <span id="traktBadge" style="font-size:0.8rem; color:#94a3b8;">Not Connected</span>
+        </div>
+
+        <div id="traktInitial">
+          <button id="btnTrakt" class="btn" onclick="startTrakt()">Tap to Connect Trakt</button>
+        </div>
+
+        <div id="traktCodeBox" class="code-box" style="display:none;">
+          <p style="margin:0 0 0.25rem 0; font-size:0.85rem; color:#cbd5e1;">Your activation code:</p>
+          <div id="traktUserCode" class="user-code">----</div>
+          <a id="traktActivateLink" class="btn btn-outline" href="https://auth.trakt.tv/activate" target="_blank">1. Open Trakt Activate in New Tab</a>
+          <button class="btn btn-outline" style="border-color:#64748b; color:#cbd5e1; margin-top:0.4rem;" onclick="copyCode()">2. Copy Code to Clipboard</button>
+          <p id="traktPollStatus" class="status-text">Waiting for you to tap Yes on Trakt...</p>
+        </div>
+
+        <div id="traktConnected" class="badge-success" style="display:none;">
+          Connected to Trakt: <span id="traktUser" style="color:#fff;"></span>
+        </div>
       </div>
 
-      <div id="simklCodeBox" class="code-box" style="display:none;">
-        <p style="margin:0 0 0.25rem 0; font-size:0.85rem; color:#cbd5e1;">Your Simkl PIN code:</p>
-        <div id="simklUserCode" class="user-code">----</div>
-        <a id="simklActivateLink" class="btn btn-outline" href="https://simkl.com/pin" target="_blank">1. Open simkl.com/pin in New Tab</a>
-        <button class="btn btn-outline" style="border-color:#64748b; color:#cbd5e1; margin-top:0.4rem;" onclick="copySimklCode()">2. Copy Code to Clipboard</button>
-        <p id="simklPollStatus" class="status-text">Waiting for authorization on Simkl...</p>
+      <!-- Simkl Section -->
+      <div class="section">
+        <div class="section-title">
+          <span>2. Simkl (Optional)</span>
+          <span id="simklBadge" style="font-size:0.8rem; color:#94a3b8;">Optional</span>
+        </div>
+        <p style="font-size:0.85rem; margin:0 0 0.5rem 0;">Cross-syncs playback and watchlists with Simkl.</p>
+        <div id="simklBtnWrap">
+          <button id="btnSimkl" class="btn btn-outline" style="border-color:#38bdf8; color:#38bdf8;" onclick="startSimkl()">Tap to Connect Simkl</button>
+        </div>
+
+        <div id="simklCodeBox" class="code-box" style="display:none;">
+          <p style="margin:0 0 0.25rem 0; font-size:0.85rem; color:#cbd5e1;">Your Simkl PIN code:</p>
+          <div id="simklUserCode" class="user-code">----</div>
+          <a id="simklActivateLink" class="btn btn-outline" href="https://simkl.com/pin" target="_blank">1. Open simkl.com/pin in New Tab</a>
+          <button class="btn btn-outline" style="border-color:#64748b; color:#cbd5e1; margin-top:0.4rem;" onclick="copySimklCode()">2. Copy Code to Clipboard</button>
+          <p id="simklPollStatus" class="status-text">Waiting for authorization on Simkl...</p>
+        </div>
+
+        <div id="simklConnected" class="badge-success" style="display:none;">
+          Connected to Simkl
+        </div>
+
+        <div style="margin-top:0.75rem;">
+          <p style="font-size:0.75rem; color:#64748b; margin:0;">Or paste token directly:</p>
+          <input id="simklToken" placeholder="Paste existing Simkl Token" oninput="updateUrls()">
+        </div>
       </div>
 
-      <div id="simklConnected" class="badge-success" style="display:none;">
-        Connected to Simkl
+      <!-- Install -->
+      <div id="installSection" style="display:none; margin-top:1.5rem;">
+        <a id="stremioLink" class="btn btn-green" href="#">🚀 Install in Stremio (1-Click)</a>
+        <p style="margin:1.25rem 0 0.25rem 0; font-size:0.85rem; font-weight:600; color:#cbd5e1;">Or copy Manifest URL into Nuvio / Stremio Web:</p>
+        <div id="manifestUrl" class="url-display"></div>
       </div>
-
-      <div style="margin-top:0.75rem;">
-        <p style="font-size:0.75rem; color:#64748b; margin:0;">Or paste token directly:</p>
-        <input id="simklToken" placeholder="Paste existing Simkl Token" oninput="updateUrls()">
-      </div>
-    </div>
-
-    <!-- Install -->
-    <div id="installSection" style="display:none; margin-top:1.5rem;">
-      <a id="stremioLink" class="btn btn-green" href="#">🚀 Install in Stremio (1-Click)</a>
-      <p style="margin:1.25rem 0 0.25rem 0; font-size:0.85rem; font-weight:600; color:#cbd5e1;">Or copy Manifest URL into Nuvio / Stremio Web:</p>
-      <div id="manifestUrl" class="url-display"></div>
     </div>
   </div>
 
   <script>
     const SERVER_TRAKT_CLIENT_ID = "${traktClientId}";
     const SERVER_SIMKL_CLIENT_ID = "${simklClientId}";
+    const SERVER_ACCESS_PASSWORD = "${accessPassword}";
+    const SERVER_ALLOWED_USERS = ${JSON.stringify(allowedUsers)};
 
+    let currentPassword = '';
     let traktToken = '';
     let activeTraktClientId = SERVER_TRAKT_CLIENT_ID;
     let simklToken = '';
     let activeSimklClientId = SERVER_SIMKL_CLIENT_ID;
     let pollInterval = null;
     let simklPollInterval = null;
+
+    function checkLock() {
+      if (!SERVER_ACCESS_PASSWORD) {
+        document.getElementById('mainDashboard').style.display = 'block';
+        return;
+      }
+      const urlKey = new URLSearchParams(window.location.search).get('key') || new URLSearchParams(window.location.search).get('pass');
+      const savedPass = sessionStorage.getItem('addon_pass') || localStorage.getItem('addon_pass');
+      if (urlKey === SERVER_ACCESS_PASSWORD || savedPass === SERVER_ACCESS_PASSWORD) {
+        currentPassword = SERVER_ACCESS_PASSWORD;
+        document.getElementById('mainDashboard').style.display = 'block';
+      } else {
+        document.getElementById('mainDashboard').style.display = 'none';
+        document.getElementById('lockSection').style.display = 'block';
+      }
+    }
+
+    function unlockDashboard() {
+      const val = document.getElementById('passInput').value.trim();
+      if (val === SERVER_ACCESS_PASSWORD) {
+        currentPassword = val;
+        sessionStorage.setItem('addon_pass', val);
+        document.getElementById('lockSection').style.display = 'none';
+        document.getElementById('mainDashboard').style.display = 'block';
+        updateUrls();
+      } else {
+        alert('Invalid access password');
+      }
+    }
 
     async function startTrakt() {
       const btn = document.getElementById('btnTrakt');
@@ -585,7 +646,11 @@ export default {
 
         // Method 2: Worker Proxy fallback
         if (!data) {
-          const res = await fetch('/api/auth/start', { method: 'POST' });
+          const res = await fetch('/api/auth/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ clientId, pass: currentPassword })
+          });
           const text = await res.text();
           try {
             data = JSON.parse(text);
@@ -649,7 +714,7 @@ export default {
             const res = await fetch('/api/auth/token', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ deviceCode })
+              body: JSON.stringify({ deviceCode, clientId, pass: currentPassword })
             });
             if (res.ok) {
               const resData = await res.json();
@@ -659,8 +724,6 @@ export default {
 
           if (tokenData && tokenData.access_token) {
             clearInterval(pollInterval);
-            traktToken = tokenData.access_token;
-            activeTraktClientId = clientId;
 
             // Fetch Trakt username directly
             let username = '';
@@ -670,7 +733,7 @@ export default {
                   'Content-Type': 'application/json',
                   'trakt-api-version': '2',
                   'trakt-api-key': clientId,
-                  'Authorization': 'Bearer ' + traktToken
+                  'Authorization': 'Bearer ' + tokenData.access_token
                 }
               });
               if (uRes.ok) {
@@ -678,6 +741,17 @@ export default {
                 username = uData.username || '';
               }
             } catch (_) {}
+
+            // Safeguard: Allowed Users Check
+            if (SERVER_ALLOWED_USERS && SERVER_ALLOWED_USERS.length > 0 && username) {
+              if (!SERVER_ALLOWED_USERS.includes(username.toLowerCase())) {
+                alert('Access Denied: Account @' + username + ' is not on the allowed list for this private instance.');
+                return;
+              }
+            }
+
+            traktToken = tokenData.access_token;
+            activeTraktClientId = clientId;
 
             document.getElementById('traktCodeBox').style.display = 'none';
             document.getElementById('traktBadge').innerText = 'Connected';
@@ -702,10 +776,14 @@ export default {
       try {
         let data = null;
 
-        // Method 1: Direct browser fetch to Simkl
+        // Method 1: Direct browser fetch to Simkl OAuth2 Device endpoint
         if (clientId) {
           try {
-            const directRes = await fetch('https://api.simkl.com/oauth/pin?client_id=' + encodeURIComponent(clientId));
+            const directRes = await fetch('https://api.simkl.com/oauth2/device', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ client_id: clientId })
+            });
             if (directRes.ok) {
               data = await directRes.json();
             }
@@ -714,7 +792,11 @@ export default {
 
         // Method 2: Worker proxy fallback
         if (!data) {
-          const res = await fetch('/api/simkl/start', { method: 'POST' });
+          const res = await fetch('/api/simkl/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ clientId, pass: currentPassword })
+          });
           const text = await res.text();
           try {
             data = JSON.parse(text);
@@ -729,15 +811,19 @@ export default {
           }
         }
 
-        if (!data || !data.user_code) {
+        if (!data || !data.user_code || !data.device_code) {
           throw new Error('Failed to acquire Simkl PIN');
         }
 
         document.getElementById('simklUserCode').innerText = data.user_code;
+        const activateLink = document.getElementById('simklActivateLink');
+        if (activateLink) {
+          activateLink.href = data.verification_uri_complete || data.verification_uri || 'https://simkl.com/pin';
+        }
         document.getElementById('simklBtnWrap').style.display = 'none';
         document.getElementById('simklCodeBox').style.display = 'block';
 
-        pollSimklToken(data.user_code || data.device_code, data.interval || 5, clientId);
+        pollSimklToken(data.device_code, data.interval || 5, clientId);
       } catch (err) {
         alert(err.message);
         btn.disabled = false;
@@ -751,19 +837,27 @@ export default {
       alert('Code ' + code + ' copied to clipboard!');
     }
 
-    function pollSimklToken(userCodeOrDeviceCode, interval, clientId) {
+    function pollSimklToken(deviceCode, interval, clientId) {
       if (simklPollInterval) clearInterval(simklPollInterval);
       simklPollInterval = setInterval(async () => {
         try {
           let token = null;
 
-          // Method 1: Direct Simkl polling
-          if (clientId && userCodeOrDeviceCode) {
+          // Method 1: Direct Simkl OAuth2 Token Polling from Browser
+          if (clientId && deviceCode) {
             try {
-              const directRes = await fetch('https://api.simkl.com/oauth/pin/check/' + encodeURIComponent(userCodeOrDeviceCode) + '?client_id=' + encodeURIComponent(clientId));
+              const directRes = await fetch('https://api.simkl.com/oauth2/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  client_id: clientId,
+                  device_code: deviceCode,
+                  grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
+                })
+              });
               if (directRes.ok) {
                 const directData = await directRes.json();
-                if (directData.result === 'OK' && directData.access_token) {
+                if (directData.access_token) {
                   token = directData.access_token;
                 }
               }
@@ -775,7 +869,7 @@ export default {
             const res = await fetch('/api/simkl/token', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ deviceCode: userCodeOrDeviceCode })
+              body: JSON.stringify({ deviceCode, clientId, pass: currentPassword })
             });
             if (res.ok) {
               const resData = await res.json();
@@ -786,6 +880,7 @@ export default {
           if (token) {
             clearInterval(simklPollInterval);
             simklToken = token;
+            activeSimklClientId = clientId;
             document.getElementById('simklToken').value = simklToken;
             document.getElementById('simklCodeBox').style.display = 'none';
             document.getElementById('simklBadge').innerText = 'Connected';
@@ -804,7 +899,8 @@ export default {
         traktToken: traktToken,
         traktClientId: activeTraktClientId || SERVER_TRAKT_CLIENT_ID || undefined,
         simklToken: simkl || undefined,
-        simklClientId: activeSimklClientId || SERVER_SIMKL_CLIENT_ID || undefined
+        simklClientId: activeSimklClientId || SERVER_SIMKL_CLIENT_ID || undefined,
+        pass: SERVER_ACCESS_PASSWORD ? currentPassword : undefined
       };
 
       const enc = btoa(JSON.stringify(configObj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -815,6 +911,8 @@ export default {
       document.getElementById('manifestUrl').innerText = manifest;
       document.getElementById('stremioLink').href = stremio;
     }
+
+    checkLock();
   </script>
 </body>
 </html>`;
@@ -956,7 +1054,13 @@ export default {
 
       // Simkl Device Code Flow
       if (pathname === '/api/simkl/start' && request.method === 'POST') {
-        if (!simklClientId) {
+        let reqClientId = simklClientId;
+        try {
+          const body = await request.json();
+          if (body && body.clientId) reqClientId = body.clientId.trim();
+        } catch (_) {}
+
+        if (!reqClientId) {
           return jsonResponse({ error: 'SIMKL_CLIENT_ID not configured in Cloudflare environment variables' }, 400);
         }
         try {
@@ -965,9 +1069,9 @@ export default {
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
-              'User-Agent': USER_AGENT
+              'User-Agent': 'StremioTraktSync/2.3.0'
             },
-            body: JSON.stringify({ client_id: simklClientId })
+            body: JSON.stringify({ client_id: reqClientId })
           });
           const text = await res.text();
           try {
@@ -982,24 +1086,34 @@ export default {
       }
 
       if (pathname === '/api/simkl/token' && request.method === 'POST') {
-        if (!simklClientId) {
-          return jsonResponse({ error: 'SIMKL_CLIENT_ID not configured' }, 400);
+        let reqClientId = simklClientId;
+        let deviceCode = '';
+        try {
+          const body = await request.json();
+          if (body) {
+            deviceCode = body.deviceCode;
+            if (body.clientId) reqClientId = body.clientId.trim();
+          }
+        } catch (_) {}
+
+        if (!reqClientId || !deviceCode) {
+          return jsonResponse({ error: 'SIMKL_CLIENT_ID or deviceCode missing' }, 400);
         }
-        const { deviceCode } = await request.json();
         try {
           const res = await fetch(`${SIMKL_API_URL}/oauth2/token`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
-              'User-Agent': USER_AGENT
+              'User-Agent': 'StremioTraktSync/2.3.0'
             },
             body: JSON.stringify({
-              client_id: simklClientId,
-              code: deviceCode,
+              client_id: reqClientId,
+              device_code: deviceCode,
               grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
             })
           });
+
           if (!res.ok) {
             return jsonResponse({ status: 'pending' }, res.status);
           }
@@ -1023,6 +1137,13 @@ export default {
 
       const routeParts = parts.slice(offset);
 
+      // Passcode Safeguard Enforcement
+      if (accessPassword) {
+        if (!config || config.pass !== accessPassword) {
+          return jsonResponse({ error: 'Unauthorized: Valid ACCESS_PASSWORD required' }, 401);
+        }
+      }
+
       // Manifest
       if (routeParts.length === 1 && routeParts[0] === 'manifest.json') {
         return jsonResponse(buildManifest(config));
@@ -1035,26 +1156,37 @@ export default {
         const media = parseMediaId(type, idWithExt);
 
         if (config && media.imdbId) {
-          const token = config.traktToken || config.token;
-          const clientId = config.traktClientId || config.clientId || traktClientId;
+          const syncKey = `${media.type}:${media.imdbId}:${media.season || 0}:${media.episode || 0}`;
+          if (shouldSync(syncKey)) {
+            const token = config.traktToken || config.token;
+            const clientId = config.traktClientId || config.clientId || traktClientId;
 
-          if (ctx && ctx.waitUntil) {
-            ctx.waitUntil((async () => {
-              if (token && clientId) {
-                await syncToTrakt(media, token, clientId).catch(() => {});
-              }
-              if (config.simklToken) {
-                await syncToSimkl(media, config.simklToken).catch(() => {});
-              }
-            })());
+            if (ctx && ctx.waitUntil) {
+              ctx.waitUntil((async () => {
+                if (token && clientId) {
+                  await syncToTrakt(media, token, clientId).catch(() => {});
+                }
+                if (config.simklToken) {
+                  await syncToSimkl(media, config.simklToken).catch(() => {});
+                }
+              })());
+            }
           }
         }
 
         return jsonResponse({ subtitles: [] });
       }
 
-      // Catalogs
+      // Catalogs (with Cloudflare Edge Cache)
       if (routeParts[0] === 'catalog' && routeParts.length >= 3) {
+        const cache = caches.default;
+        const cacheKey = new Request(request.url, { method: 'GET' });
+
+        let cached = await cache.match(cacheKey);
+        if (cached) {
+          return cached;
+        }
+
         const type = routeParts[1];
         const idWithExt = routeParts[2];
         const catalogId = idWithExt.replace(/\.json$/, '');
@@ -1062,7 +1194,20 @@ export default {
 
         if (!config) return jsonResponse({ metas: [] });
         const metas = await handleCatalog(catalogId, type, extraSegment, config, traktClientId, simklClientId);
-        return jsonResponse({ metas });
+        
+        const response = new Response(JSON.stringify({ metas }), {
+          status: 200,
+          headers: {
+            ...CORS_HEADERS,
+            'Cache-Control': 'public, max-age=300, stale-while-revalidate=600'
+          }
+        });
+
+        if (ctx && ctx.waitUntil) {
+          ctx.waitUntil(cache.put(cacheKey, response.clone()));
+        }
+
+        return response;
       }
 
       return jsonResponse({ error: 'Not found' }, 404);
