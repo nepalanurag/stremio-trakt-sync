@@ -160,19 +160,29 @@ function buildManifest(config) {
 
   return {
     id: 'org.multisync.stremio',
-    version: '2.5.2',
+    version: '2.5.3',
     name: 'MultiSync (Trakt & Simkl)',
     description: 'Syncs Trakt and Simkl Watchlists, Continue Watching, and History to Stremio and Nuvio across all devices without account logouts.',
     logo: 'https://raw.githubusercontent.com/nepalanurag/stremio-trakt-sync/main/icon.svg',
     background: 'https://images.metahub.space/background/medium/tt0903747/img',
     resources: ['catalog', 'subtitles'],
     types: ['movie', 'series'],
+    idPrefixes: ['tt', 'trakt', 'simkl'],
     catalogs,
     behaviorHints: {
       configurable: true,
       configurationRequired: false
     }
   };
+}
+
+function formatImageUrl(url) {
+  if (!url || typeof url !== 'string') return undefined;
+  const trimmed = url.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.startsWith('https://') || trimmed.startsWith('http://')) return trimmed;
+  if (trimmed.startsWith('//')) return `https:${trimmed}`;
+  return `https://${trimmed.replace(/^\/+/, '')}`;
 }
 
 const CORS_HEADERS = {
@@ -232,21 +242,21 @@ function mapToMeta(item, type) {
 
   let poster = undefined;
   if (target.images?.poster?.[0]) {
-    poster = `https://${target.images.poster[0]}`;
+    poster = formatImageUrl(target.images.poster[0]);
   } else if (imdbId) {
     poster = `https://images.metahub.space/poster/medium/${imdbId}/img`;
   }
 
   let background = undefined;
   if (target.images?.fanart?.[0]) {
-    background = `https://${target.images.fanart[0]}`;
+    background = formatImageUrl(target.images.fanart[0]);
   } else if (imdbId) {
     background = `https://images.metahub.space/background/medium/${imdbId}/img`;
   }
 
   let logo = undefined;
   if (target.images?.logo?.[0]) {
-    logo = `https://${target.images.logo[0]}`;
+    logo = formatImageUrl(target.images.logo[0]);
   } else if (imdbId) {
     logo = `https://images.metahub.space/logo/medium/${imdbId}/img`;
   }
@@ -284,7 +294,7 @@ function mapSimklToMeta(item, type) {
   const title = target.title || 'Unknown Title';
   const year = target.year ? String(target.year) : undefined;
   const poster = target.poster
-    ? `https://simkl.in/posters/${target.poster}_m.jpg`
+    ? (target.poster.startsWith('http') ? target.poster : `https://simkl.in/posters/${target.poster}_m.jpg`)
     : (imdbId ? `https://images.metahub.space/poster/medium/${imdbId}/img` : undefined);
   const background = imdbId ? `https://images.metahub.space/background/medium/${imdbId}/img` : undefined;
 
@@ -516,10 +526,15 @@ export default {
       const routeParts = parts.slice(offset);
 
       // Web Dashboard (Root, /configure, or /:config/configure)
-      const isConfigurePage =
+      const isExplicitConfigure =
         pathname === '/' ||
         pathname === '/configure' ||
-        (potentialConfig && (routeParts.length === 0 || (routeParts.length === 1 && routeParts[0] === 'configure')));
+        (potentialConfig && routeParts.length === 1 && routeParts[0] === 'configure');
+
+      const acceptHeader = request.headers.get('accept') || '';
+      const isBrowserHtmlNav = acceptHeader.includes('text/html') && !acceptHeader.includes('application/json');
+
+      const isConfigurePage = isExplicitConfigure || (potentialConfig && routeParts.length === 0 && isBrowserHtmlNav);
 
       if (isConfigurePage) {
         const html = `<!DOCTYPE html>
@@ -1373,7 +1388,6 @@ export default {
       const clientId = activeTraktClientId || SERVER_TRAKT_CLIENT_ID;
       try {
         let data = null;
-        let directAttempted = false;
         try {
           const directRes = await fetch('https://api.trakt.tv/oauth/device/code', {
             method: 'POST',
@@ -1385,11 +1399,10 @@ export default {
             },
             body: JSON.stringify({ client_id: clientId })
           });
-          directAttempted = true;
           if (directRes.ok) data = await directRes.json();
         } catch (_) {}
 
-        if (!data && !directAttempted) {
+        if (!data || !data.user_code) {
           const res = await fetch('/api/auth/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1424,7 +1437,6 @@ export default {
       pollInterval = setInterval(async () => {
         try {
           let tokenData = null;
-          let directAttempted = false;
           try {
             const directRes = await fetch('https://api.trakt.tv/oauth/device/token', {
               method: 'POST',
@@ -1436,17 +1448,21 @@ export default {
               },
               body: JSON.stringify({ code: deviceCode, client_id: clientId })
             });
-            directAttempted = true;
             if (directRes.ok) tokenData = await directRes.json();
           } catch (_) {}
 
-          if (!tokenData && !directAttempted) {
-            const res = await fetch('/api/auth/token', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ deviceCode, clientId, pass: currentPassword })
-            });
-            if (res.ok) tokenData = await res.json();
+          if (!tokenData || !tokenData.access_token) {
+            try {
+              const res = await fetch('/api/auth/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deviceCode, clientId, pass: currentPassword })
+              });
+              if (res.ok) {
+                const data = await res.json();
+                if (data && data.access_token) tokenData = data;
+              }
+            } catch (_) {}
           }
 
           if (tokenData && tokenData.access_token) {
@@ -1498,7 +1514,6 @@ export default {
       const clientId = activeSimklClientId || SERVER_SIMKL_CLIENT_ID;
       try {
         let data = null;
-        let directAttempted = false;
         if (clientId) {
           try {
             const directRes = await fetch('https://api.simkl.com/oauth2/device', {
@@ -1506,12 +1521,11 @@ export default {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ client_id: clientId })
             });
-            directAttempted = true;
             if (directRes.ok) data = await directRes.json();
           } catch (_) {}
         }
 
-        if (!data && !directAttempted) {
+        if (!data || !data.user_code) {
           const res = await fetch('/api/simkl/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1549,7 +1563,6 @@ export default {
       simklPollInterval = setInterval(async () => {
         try {
           let token = null;
-          let directAttempted = false;
           if (clientId && deviceCode) {
             try {
               const directRes = await fetch('https://api.simkl.com/oauth2/token', {
@@ -1561,24 +1574,25 @@ export default {
                   grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
                 })
               });
-              directAttempted = true;
               if (directRes.ok) {
                 const directData = await directRes.json();
-                if (directData.access_token) token = directData.access_token;
+                if (directData && directData.access_token) token = directData.access_token;
               }
             } catch (_) {}
           }
 
-          if (!token && !directAttempted) {
-            const res = await fetch('/api/simkl/token', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ deviceCode, clientId, pass: currentPassword })
-            });
-            if (res.ok) {
-              const resData = await res.json();
-              if (resData.access_token) token = resData.access_token;
-            }
+          if (!token) {
+            try {
+              const res = await fetch('/api/simkl/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deviceCode, clientId, pass: currentPassword })
+              });
+              if (res.ok) {
+                const resData = await res.json();
+                if (resData && resData.access_token) token = resData.access_token;
+              }
+            } catch (_) {}
           }
 
           if (token) {
@@ -1909,8 +1923,8 @@ export default {
         }
       }
 
-      // Manifest
-      if (routeParts.length === 1 && routeParts[0] === 'manifest.json') {
+      // Manifest (matches /:config/manifest.json OR /manifest.json OR /:config for direct addon installs)
+      if ((routeParts.length === 1 && routeParts[0] === 'manifest.json') || (potentialConfig && routeParts.length === 0)) {
         return jsonResponse(buildManifest(config));
       }
 
