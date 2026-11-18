@@ -32,8 +32,8 @@ const GENRE_OPTIONS = [
 const BASE_CATALOGS = [
   {
     type: 'series',
-    id: 'trakt_playback_series',
-    name: 'Trakt - Continue Watching',
+    id: 'org.multisync.stremio',
+    name: 'MultiSync (Trakt & Simkl)',
     extra: [{ name: 'skip', isRequired: false }],
     extraSupported: ['skip']
   },
@@ -160,7 +160,7 @@ function buildManifest(config) {
 
   return {
     id: 'org.syncribullet.multisync',
-    version: '2.5.0',
+    version: '2.5.1',
     name: 'SyncriBullet - Multi-Tracker Sync',
     description: 'Syncs Trakt and Simkl Watchlists, Continue Watching, and History to Stremio and Nuvio across all devices without account logouts.',
     logo: 'https://raw.githubusercontent.com/nepalanurag/stremio-trakt-sync/main/icon.svg',
@@ -527,699 +527,687 @@ export default {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SyncriBullet - Stremio & Nuvio Multi-Tracker Sync</title>
+  <title>MultiSync - Stremio & Nuvio Trakt & Simkl Sync</title>
   <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #111827;
+      --card-border: #1f2937;
+      --card-hover: #162033;
+      --accent-trakt: #ed1c40;
+      --accent-simkl: #0284c7;
+      --accent-stremio: #7c3aed;
+      --accent-green: #10b981;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background-color: #000000;
-      color: #f1f5f9;
+      background-color: var(--bg);
+      color: var(--text-main);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
       padding: 2.5rem 1rem 4rem 1rem;
+      line-height: 1.5;
     }
 
-    /* SyncriBullet Header */
-    .header-container {
+    /* Container */
+    .app-container {
+      width: 100%;
+      max-width: 680px;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      margin-bottom: 2rem;
+      gap: 1.25rem;
     }
-    .syncri-logo {
-      display: inline-flex;
+
+    /* Header */
+    .app-header {
+      display: flex;
       align-items: center;
-      gap: 0;
-      user-select: none;
-      margin-bottom: 0.85rem;
+      justify-content: space-between;
+      padding-bottom: 0.5rem;
     }
-    .syncri-blocks {
-      display: inline-flex;
-      border-radius: 4px;
-      overflow: hidden;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.6);
-    }
-    .blk {
-      display: inline-flex;
+    .brand-wrap {
+      display: flex;
       align-items: center;
-      justify-content: center;
-      width: 32px;
-      height: 48px;
-      font-size: 2rem;
+      gap: 0.85rem;
+    }
+    .brand-logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(237, 28, 64, 0.25);
+    }
+    .brand-title {
+      font-size: 1.45rem;
       font-weight: 800;
-      color: #ffffff;
-      text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-    }
-    .blk-s { background: #96ceb4; }
-    .blk-y { background: #e53935; }
-    .blk-n { background: #1e88e5; }
-    .blk-c { background: #00bcd4; }
-    .blk-r { background: #ff7043; }
-    .blk-i { background: #263238; }
-    .syncri-text {
-      font-size: 2.2rem;
-      font-weight: 800;
-      color: #ffffff;
-      margin-left: 6px;
       letter-spacing: -0.5px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
-    .syncri-ver {
-      font-size: 0.95rem;
-      font-weight: 600;
+    .brand-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      background: #1e293b;
       color: #94a3b8;
-      margin-left: 8px;
-      margin-top: 8px;
+      padding: 0.15rem 0.5rem;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
-    .github-link a {
-      color: #cbd5e1;
-      display: inline-flex;
-      transition: opacity 0.2s;
+    .brand-sub {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: -2px;
     }
-    .github-link a:hover {
-      opacity: 0.75;
+    .github-link {
+      color: var(--text-muted);
+      transition: color 0.15s;
+    }
+    .github-link:hover {
+      color: #fff;
     }
 
-    /* Main Container Cards */
-    .dashboard-wrap {
-      width: 100%;
-      max-width: 620px;
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-    }
-    .sb-card {
-      background: #253327;
-      border: 1px solid #334436;
+    /* Cards */
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
       border-radius: 16px;
-      padding: 1.85rem 1.5rem;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      text-align: center;
+      padding: 1.5rem;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
     }
-    .sb-card-title {
-      font-size: 1.65rem;
-      font-weight: 700;
-      color: #e2ece4;
-      margin-bottom: 0.75rem;
-      letter-spacing: -0.3px;
-    }
-    .sb-card-subtitle {
-      font-size: 1rem;
-      font-weight: 600;
-      color: #e2ece4;
-      margin: 1rem 0 0.75rem 0;
-    }
-
-    /* Pill Buttons (SyncriBullet Style) */
-    .pills-row {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 0.65rem;
-    }
-    .service-pill {
-      background: #19241b;
-      border: 1px solid #314234;
-      border-radius: 9999px;
-      padding: 0.45rem 1.15rem 0.45rem 0.65rem;
-      color: #f1f5f9;
-      font-size: 0.92rem;
-      font-weight: 600;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.65rem;
-      transition: all 0.15s ease-in-out;
-      user-select: none;
-    }
-    .service-pill:hover {
-      background: #202e23;
-      border-color: #455a49;
-      transform: translateY(-1px);
-    }
-    .service-pill.active-pill {
-      border-color: #9edbb2;
-    }
-    .pill-icon {
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
+    .panel-header {
       display: flex;
       align-items: center;
-      justify-content: center;
-      font-size: 0.7rem;
-      font-weight: 800;
-      flex-shrink: 0;
+      justify-content: space-between;
+      margin-bottom: 1rem;
     }
-    .icon-simkl { background: #000; color: #fff; border: 1px solid #444; }
-    .icon-trakt { background: #ed1c40; color: #fff; }
-    .icon-stremio { background: #725bb7; color: #fff; }
-    .icon-nuvio { background: #0d9488; color: #fff; }
-    .icon-sb { background: #3b503e; color: #9edbb2; font-size: 0.65rem; }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #475569;
-      margin-left: 0.15rem;
-    }
-    .status-dot.connected {
-      background: #22c55e;
-      box-shadow: 0 0 6px #22c55e;
-    }
-
-    /* Modal Backdrop & Container */
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.78);
-      backdrop-filter: blur(5px);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-      padding: 1rem;
-    }
-    .modal-container {
-      background: #19231b;
-      border: 1px solid #2d3e30;
-      border-radius: 16px;
-      width: 100%;
-      max-width: 540px;
-      box-shadow: 0 25px 60px rgba(0,0,0,0.85);
-      padding: 1.85rem;
-      max-height: 88vh;
-      overflow-y: auto;
-      animation: modalFadeIn 0.15s ease-out;
-    }
-    @keyframes modalFadeIn {
-      from { opacity: 0; transform: scale(0.97); }
-      to { opacity: 1; transform: scale(1); }
-    }
-    .modal-header {
-      text-align: center;
-      margin-bottom: 1.25rem;
-    }
-    .modal-title {
-      font-size: 1.75rem;
-      font-weight: 700;
-      color: #ffffff;
-    }
-    .modal-section-title {
+    .panel-title {
       font-size: 1.05rem;
       font-weight: 700;
-      color: #e2ece4;
-      margin: 0.75rem 0 0.85rem 0;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
 
-    /* Tabs (SyncriBullet Style) */
-    .tabs-row {
+    /* Trackers Grid */
+    .trackers-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 580px) {
+      .trackers-grid { grid-template-columns: 1fr; }
+    }
+    .tracker-card {
+      background: #0d131f;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: border-color 0.15s;
+    }
+    .tracker-card:hover {
+      border-color: #334155;
+    }
+    .tracker-card.active {
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+    .tracker-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.85rem;
+    }
+    .tracker-identity {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    .tracker-badge-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 0.85rem;
+      color: #fff;
+    }
+    .icon-trakt { background: var(--accent-trakt); }
+    .icon-simkl { background: var(--accent-simkl); }
+    .tracker-name {
+      font-weight: 700;
+      font-size: 1rem;
+      color: #fff;
+    }
+    .status-pill {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.2rem 0.55rem;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .status-pill.connected {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .status-pill.disconnected {
+      background: rgba(148, 163, 184, 0.1);
+      color: var(--text-muted);
+    }
+    .pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #10b981;
+    }
+    .tracker-user {
+      font-size: 0.88rem;
+      color: #e2e8f0;
+      margin-bottom: 0.85rem;
+    }
+    .btn-connect {
+      background: #1e293b;
+      color: #f1f5f9;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 0.55rem 0.9rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .btn-connect:hover {
+      background: #273549;
+      color: #fff;
+    }
+    .btn-disconnect {
+      background: transparent;
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 8px;
+      padding: 0.45rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.15s;
+    }
+    .btn-disconnect:hover {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: #ef4444;
+    }
+
+    /* Code Box for Auth */
+    .auth-box {
+      background: #020617;
+      border: 1px dashed #38bdf8;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-top: 0.75rem;
+      text-align: center;
+    }
+    .auth-code {
+      font-size: 1.7rem;
+      font-weight: 800;
+      letter-spacing: 4px;
+      color: #38bdf8;
+      font-family: monospace;
+      margin: 0.35rem 0;
+    }
+    .auth-actions {
       display: flex;
       gap: 0.5rem;
-      margin-bottom: 1.25rem;
-      flex-wrap: wrap;
+      margin-top: 0.5rem;
     }
-    .tab-btn {
-      background: #6a8c76;
-      color: #ffffff;
+    .btn-auth-link {
+      flex: 1;
+      background: #0284c7;
+      color: #fff;
       border: none;
       border-radius: 6px;
+      padding: 0.5rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .btn-auth-copy {
+      background: transparent;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Tabs */
+    .tabs-nav {
+      display: flex;
+      gap: 0.5rem;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    .tab-pill {
+      background: transparent;
+      color: var(--text-muted);
+      border: none;
       padding: 0.5rem 1rem;
+      border-radius: 8px;
       font-size: 0.9rem;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.15s ease;
+      transition: all 0.15s;
     }
-    .tab-btn:hover {
-      background: #7ca089;
+    .tab-pill:hover {
+      color: #fff;
+      background: #1e293b;
     }
-    .tab-btn.tab-active {
-      background: #9edbb2;
-      color: #0f2516;
+    .tab-pill.active {
+      background: #1e293b;
+      color: #38bdf8;
       font-weight: 700;
     }
 
-    /* Tab Content Areas */
-    .tab-pane {
-      display: none;
+    /* Catalog Sections */
+    .catalog-group-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.75px;
+      color: #38bdf8;
+      margin: 1.25rem 0 0.5rem 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
-    .tab-pane.pane-active {
-      display: block;
+    .catalog-group-title:first-child {
+      margin-top: 0;
     }
-
-    /* Catalog Checkbox List */
-    .cat-checkbox-group {
+    .cat-list {
       display: flex;
       flex-direction: column;
-      gap: 0.85rem;
-      margin: 1rem 0;
+      gap: 0.45rem;
     }
     .cat-item {
+      background: #0d131f;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 0.65rem 0.85rem;
       display: flex;
-      align-items: flex-start;
-      gap: 0.75rem;
+      align-items: center;
+      justify-content: space-between;
       cursor: pointer;
+      transition: all 0.15s;
       user-select: none;
+    }
+    .cat-item:hover {
+      background: #131b2e;
+      border-color: #334155;
+    }
+    .cat-left {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
     }
     .cat-item input[type="checkbox"] {
       width: 17px;
       height: 17px;
-      accent-color: #2563eb;
-      margin-top: 2px;
+      accent-color: #0284c7;
       cursor: pointer;
-      flex-shrink: 0;
     }
-    .cat-details {
-      display: flex;
-      flex-direction: column;
-      gap: 0.15rem;
-    }
-    .cat-name {
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: #ffffff;
-    }
-    .cat-type {
-      font-size: 0.8rem;
-      color: #8ea495;
-    }
-
-    /* Action Buttons */
-    .btn-save {
-      background: #9edbb2;
-      color: #0d2214;
-      border: none;
-      border-radius: 9999px;
-      padding: 0.6rem 1.4rem;
-      font-size: 0.95rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: background 0.15s ease;
-    }
-    .btn-save:hover {
-      background: #b1e4c3;
-    }
-    .btn-danger-pill {
-      background: #fca5a5;
-      color: #7f1d1d;
-      border: none;
-      border-radius: 9999px;
-      padding: 0.55rem 1.25rem;
-      font-size: 0.88rem;
-      font-weight: 700;
-      cursor: pointer;
-      margin-top: 0.75rem;
-      transition: background 0.15s;
-    }
-    .btn-danger-pill:hover {
-      background: #f87171;
-    }
-    .btn-ghost {
-      background: transparent;
-      border: 1px solid #425846;
-      color: #cbd5e1;
-      border-radius: 9999px;
-      padding: 0.55rem 1.25rem;
+    .cat-title {
       font-size: 0.9rem;
       font-weight: 600;
-      cursor: pointer;
+      color: #f1f5f9;
     }
-    .btn-ghost:hover {
-      background: rgba(255,255,255,0.05);
-      border-color: #6a8c76;
-    }
-
-    /* Code activation box */
-    .code-box {
-      background: #111a13;
-      border: 1px dashed #6a8c76;
-      border-radius: 10px;
-      padding: 1.25rem;
-      margin: 1rem 0;
-      text-align: center;
-    }
-    .code-display {
-      font-size: 2.1rem;
-      font-weight: 800;
-      letter-spacing: 5px;
-      color: #9edbb2;
-      font-family: monospace;
-      margin: 0.5rem 0;
-    }
-    .code-btn {
-      display: inline-block;
-      background: transparent;
-      border: 1px solid #9edbb2;
-      color: #9edbb2;
-      border-radius: 6px;
-      padding: 0.5rem 1rem;
-      font-size: 0.88rem;
-      font-weight: 600;
-      text-decoration: none;
-      margin-top: 0.4rem;
-      cursor: pointer;
-    }
-    .code-btn:hover {
-      background: rgba(158,219,178,0.12);
+    .cat-type {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-dim);
+      background: #1e293b;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      text-transform: uppercase;
     }
 
-    .modal-footer {
+    /* Live Sync Switches */
+    .sync-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-top: 1.75rem;
-      padding-top: 1.25rem;
-      border-top: 1px solid #28382b;
+      padding: 0.85rem 0;
+      border-bottom: 1px solid #1e293b;
+    }
+    .sync-row:last-child {
+      border-bottom: none;
+    }
+    .sync-meta h4 {
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: #fff;
+    }
+    .sync-meta p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
     }
 
-    /* Toast Notification */
+    /* Installation Section */
+    .install-box {
+      background: linear-gradient(135deg, rgba(124, 58, 237, 0.1) 0%, rgba(2, 132, 199, 0.1) 100%);
+      border: 1px solid rgba(124, 58, 237, 0.3);
+      border-radius: 16px;
+      padding: 1.5rem;
+      text-align: center;
+    }
+    .btn-install-primary {
+      background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 0.9rem 1.5rem;
+      font-size: 1.05rem;
+      font-weight: 700;
+      display: block;
+      width: 100%;
+      text-decoration: none;
+      box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-install-primary:hover {
+      box-shadow: 0 6px 25px rgba(124, 58, 237, 0.6);
+      transform: translateY(-1px);
+    }
+    .manifest-box {
+      background: #020617;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 0.75rem;
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: #38bdf8;
+      word-break: break-all;
+      margin: 0.85rem 0 0.5rem 0;
+      user-select: all;
+    }
+    .btn-copy {
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 0.5rem 1rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-copy:hover {
+      background: #273549;
+      color: #fff;
+    }
+
+    /* Lock Screen */
+    .lock-screen {
+      text-align: center;
+      padding: 2.5rem 1rem;
+    }
+    .lock-icon {
+      font-size: 3rem;
+      margin-bottom: 0.75rem;
+    }
+    .lock-input {
+      background: #020617;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      color: #fff;
+      font-size: 0.95rem;
+      width: 100%;
+      max-width: 280px;
+      text-align: center;
+      margin: 1rem auto;
+      display: block;
+    }
+    .btn-unlock {
+      background: #0284c7;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.65rem 1.5rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Toast */
     #toast {
       position: fixed;
       bottom: 2rem;
-      background: #9edbb2;
-      color: #0d2214;
+      background: #10b981;
+      color: #022c22;
       font-weight: 700;
-      padding: 0.75rem 1.5rem;
+      padding: 0.65rem 1.4rem;
       border-radius: 9999px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.5);
       display: none;
       z-index: 2000;
-      animation: toastIn 0.2s ease;
-    }
-    @keyframes toastIn {
-      from { transform: translateY(20px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
     }
   </style>
 </head>
 <body>
 
-  <!-- SyncriBullet Header -->
-  <div class="header-container">
-    <div class="syncri-logo">
-      <div class="syncri-blocks">
-        <span class="blk blk-s">S</span>
-        <span class="blk blk-y">y</span>
-        <span class="blk blk-n">n</span>
-        <span class="blk blk-c">c</span>
-        <span class="blk blk-r">r</span>
-        <span class="blk blk-i">i</span>
+  <div class="app-container">
+
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand-wrap">
+        <img class="brand-logo" src="/icon.svg" alt="MultiSync">
+        <div>
+          <div class="brand-title">
+            MultiSync
+            <span class="brand-badge">v2.5.0</span>
+          </div>
+          <div class="brand-sub">Trakt & Simkl Multi-Device Sync for Stremio & Nuvio</div>
+        </div>
       </div>
-      <span class="syncri-text">Bullet</span>
-      <span class="syncri-ver">(v2.4.2)</span>
-    </div>
-    <div class="github-link">
-      <a href="https://github.com/nepalanurag/stremio-trakt-sync" target="_blank" rel="noopener">
-        <svg height="24" width="24" viewBox="0 0 16 16" fill="#cbd5e1">
+      <a class="github-link" href="https://github.com/nepalanurag/stremio-trakt-sync" target="_blank" rel="noopener">
+        <svg height="24" width="24" viewBox="0 0 16 16" fill="currentColor">
           <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
         </svg>
       </a>
-    </div>
-  </div>
+    </header>
 
-  <!-- Dashboard Container -->
-  <div class="dashboard-wrap" id="mainDashboard">
-    
-    <!-- 1. Receivers Card -->
-    <div class="sb-card">
-      <div class="sb-card-title">Receivers</div>
-      
-      <div class="sb-card-subtitle">Sync</div>
-      <div class="pills-row">
-        <!-- Simkl Pill -->
-        <button class="service-pill" onclick="openModal('simkl')">
-          <div class="pill-icon icon-simkl">S</div>
-          <span>Simkl</span>
-          <span id="simklStatusDot" class="status-dot"></span>
-        </button>
-
-        <!-- Trakt Pill -->
-        <button class="service-pill" onclick="openModal('trakt')">
-          <div class="pill-icon icon-trakt">T</div>
-          <span>Trakt</span>
-          <span id="traktStatusDot" class="status-dot"></span>
-        </button>
-      </div>
-
-      <div class="sb-card-subtitle" style="margin-top: 1.5rem;">General Settings</div>
-      <div class="pills-row">
-        <button class="service-pill" onclick="openModal('general')">
-          <div class="pill-icon icon-sb">SB</div>
-          <span>syncribullet</span>
-        </button>
-      </div>
+    <!-- Lock Screen (if locked) -->
+    <div id="lockCard" class="panel lock-screen" style="display:none;">
+      <div class="lock-icon">🔒</div>
+      <h2 style="font-size:1.35rem; color:#fff; margin-bottom:0.35rem;">Protected Addon Instance</h2>
+      <p style="font-size:0.88rem; color:var(--text-muted);">Enter master password to access configuration.</p>
+      <input id="passInput" class="lock-input" type="password" placeholder="Enter Access Password" onkeydown="if(event.key==='Enter') unlockDashboard()">
+      <button class="btn-unlock" onclick="unlockDashboard()">Unlock Configuration</button>
     </div>
 
-    <!-- 2. Senders Card -->
-    <div class="sb-card">
-      <div class="sb-card-title">Senders</div>
+    <!-- Main Dashboard -->
+    <div id="mainDashboard" style="display:flex; flex-direction:column; gap:1.25rem;">
 
-      <div class="sb-card-subtitle">Applications</div>
-      <div class="pills-row">
-        <!-- Stremio Pill -->
-        <button class="service-pill" onclick="openModal('stremio')">
-          <div class="pill-icon icon-stremio">▶</div>
-          <span>Stremio</span>
-        </button>
-
-        <!-- Nuvio Pill -->
-        <button class="service-pill" onclick="openModal('nuvio')">
-          <div class="pill-icon icon-nuvio">N</div>
-          <span>Nuvio</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Toast -->
-  <div id="toast">Settings Saved</div>
-
-  <!-- ================= MODALS ================= -->
-
-  <!-- Modal Backdrop -->
-  <div class="modal-backdrop" id="modalBackdrop" onclick="handleBackdropClick(event)">
-
-    <!-- SIMKL MODAL -->
-    <div class="modal-container" id="modalSimkl" style="display:none;">
-      <div class="modal-header">
-        <h2 class="modal-title">Simkl</h2>
-        <div class="modal-section-title">Settings</div>
-      </div>
-
-      <!-- Tabs -->
-      <div class="tabs-row">
-        <button class="tab-btn tab-active" id="tabBtn-simkl-catalogs" onclick="switchTab('simkl', 'catalogs')">Catalogs</button>
-        <button class="tab-btn" id="tabBtn-simkl-sync" onclick="switchTab('simkl', 'sync')">Live Sync</button>
-        <button class="tab-btn" id="tabBtn-simkl-creds" onclick="switchTab('simkl', 'creds')">Credentials</button>
-      </div>
-
-      <!-- Tab 1: Catalogs -->
-      <div class="tab-pane pane-active" id="pane-simkl-catalogs">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-          <span style="font-size:0.8rem; color:#8ea495;">Toggle catalogs for Stremio/Nuvio</span>
-          <div style="display:flex; gap:0.4rem;">
-            <button class="btn-ghost" style="padding:0.2rem 0.6rem; font-size:0.75rem;" onclick="toggleGroupCatalogs('simkl', true)">All</button>
-            <button class="btn-ghost" style="padding:0.2rem 0.6rem; font-size:0.75rem;" onclick="toggleGroupCatalogs('simkl', false)">None</button>
-          </div>
-        </div>
-        <div class="cat-checkbox-group" id="simklCatGroup"></div>
-      </div>
-
-      <!-- Tab 2: Live Sync -->
-      <div class="tab-pane" id="pane-simkl-sync">
-        <div class="cat-checkbox-group">
-          <label class="cat-item">
-            <input type="checkbox" id="syncSimklMovie" checked>
-            <div class="cat-details">
-              <span class="cat-name">movie</span>
-              <span class="cat-type">Scrobble movies on playback start</span>
-            </div>
-          </label>
-          <label class="cat-item">
-            <input type="checkbox" id="syncSimklSeries" checked>
-            <div class="cat-details">
-              <span class="cat-name">series</span>
-              <span class="cat-type">Scrobble TV episodes on playback start</span>
-            </div>
-          </label>
-        </div>
-      </div>
-
-      <!-- Tab 3: Credentials -->
-      <div class="tab-pane" id="pane-simkl-creds">
-        <div id="simklCredsConnected" style="display:none;">
-          <p style="font-size:0.92rem; color:#fca5a5; line-height:1.5; margin-bottom:1rem;">
-            This will clear all credentials and remove all the settings associated with Simkl. Resetting to the default settings.
-          </p>
-          <button class="btn-danger-pill" onclick="disconnectSimkl()">Remove Credentials</button>
+      <!-- 1. Connected Trackers -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Trackers & Accounts</span>
+          <span style="font-size:0.8rem; color:var(--text-dim);">Connect once, sync everywhere</span>
         </div>
 
-        <div id="simklCredsDisconnected">
-          <p style="font-size:0.9rem; color:#8ea495; margin-bottom:0.75rem;">Connect your Simkl account to sync watchlists and playback history.</p>
-          <button class="code-btn" style="width:100%; padding:0.75rem;" id="btnStartSimkl" onclick="startSimkl()">Tap to Connect Simkl</button>
+        <div class="trackers-grid">
           
-          <div class="code-box" id="simklCodeBox" style="display:none;">
-            <p style="font-size:0.85rem; color:#cbd5e1; margin-bottom:0.25rem;">Your Simkl PIN code:</p>
-            <div class="code-display" id="simklUserCode">----</div>
-            <a class="code-btn" id="simklActivateLink" href="https://simkl.com/pin" target="_blank">1. Open simkl.com/pin in New Tab</a>
-            <button class="code-btn" style="margin-left:0.4rem;" onclick="copySimklCode()">2. Copy Code</button>
-            <p style="font-size:0.8rem; color:#8ea495; margin-top:0.75rem;">Waiting for authorization on Simkl...</p>
-          </div>
-
-          <div style="margin-top:1.25rem;">
-            <p style="font-size:0.78rem; color:#64748b; margin-bottom:0.3rem;">Or paste existing Simkl Token:</p>
-            <input id="simklTokenInput" style="width:100%; padding:0.6rem; background:#111a13; border:1px solid #334436; border-radius:6px; color:#fff;" placeholder="Paste Simkl Token" oninput="onSimklTokenInput()">
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button class="btn-save" onclick="saveAndClose()">Save Settings</button>
-        <button class="btn-ghost" onclick="closeModal()">Close</button>
-      </div>
-    </div>
-
-    <!-- TRAKT MODAL -->
-    <div class="modal-container" id="modalTrakt" style="display:none;">
-      <div class="modal-header">
-        <h2 class="modal-title">Trakt</h2>
-        <div class="modal-section-title">Settings</div>
-      </div>
-
-      <!-- Tabs -->
-      <div class="tabs-row">
-        <button class="tab-btn tab-active" id="tabBtn-trakt-catalogs" onclick="switchTab('trakt', 'catalogs')">Catalogs</button>
-        <button class="tab-btn" id="tabBtn-trakt-sync" onclick="switchTab('trakt', 'sync')">Live Sync</button>
-        <button class="tab-btn" id="tabBtn-trakt-creds" onclick="switchTab('trakt', 'creds')">Credentials</button>
-      </div>
-
-      <!-- Tab 1: Catalogs -->
-      <div class="tab-pane pane-active" id="pane-trakt-catalogs">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-          <span style="font-size:0.8rem; color:#8ea495;">Toggle catalogs for Stremio/Nuvio</span>
-          <div style="display:flex; gap:0.4rem;">
-            <button class="btn-ghost" style="padding:0.2rem 0.6rem; font-size:0.75rem;" onclick="toggleGroupCatalogs('trakt', true)">All</button>
-            <button class="btn-ghost" style="padding:0.2rem 0.6rem; font-size:0.75rem;" onclick="toggleGroupCatalogs('trakt', false)">None</button>
-          </div>
-        </div>
-        <div class="cat-checkbox-group" id="traktCatGroup"></div>
-      </div>
-
-      <!-- Tab 2: Live Sync -->
-      <div class="tab-pane" id="pane-trakt-sync">
-        <div class="cat-checkbox-group">
-          <label class="cat-item">
-            <input type="checkbox" id="syncTraktMovie" checked>
-            <div class="cat-details">
-              <span class="cat-name">movie</span>
-              <span class="cat-type">Scrobble movies on playback start</span>
+          <!-- Trakt Card -->
+          <div class="tracker-card" id="traktCard">
+            <div>
+              <div class="tracker-top">
+                <div class="tracker-identity">
+                  <div class="tracker-badge-icon icon-trakt">T</div>
+                  <span class="tracker-name">Trakt</span>
+                </div>
+                <span id="traktStatusPill" class="status-pill disconnected">Not Connected</span>
+              </div>
+              <div id="traktUserInfo" class="tracker-user" style="display:none;">
+                User: <strong id="traktUsername" style="color:#fff;"></strong>
+              </div>
             </div>
-          </label>
-          <label class="cat-item">
-            <input type="checkbox" id="syncTraktSeries" checked>
-            <div class="cat-details">
-              <span class="cat-name">series</span>
-              <span class="cat-type">Scrobble TV episodes on playback start</span>
+
+            <div>
+              <div id="traktActionInitial">
+                <button class="btn-connect" id="btnStartTrakt" onclick="startTrakt()">Connect Trakt</button>
+              </div>
+
+              <div id="traktCodeBox" class="auth-box" style="display:none;">
+                <p style="font-size:0.78rem; color:var(--text-muted);">Trakt Activation Code:</p>
+                <div id="traktUserCode" class="auth-code">----</div>
+                <div class="auth-actions">
+                  <a id="traktActivateLink" class="btn-auth-link" href="https://auth.trakt.tv/activate" target="_blank">1. Open Trakt</a>
+                  <button class="btn-auth-copy" onclick="copyTraktCode()">2. Copy</button>
+                </div>
+                <p style="font-size:0.75rem; color:#38bdf8; margin-top:0.4rem;">Waiting for authorization...</p>
+              </div>
+
+              <div id="traktActionConnected" style="display:none;">
+                <button class="btn-disconnect" onclick="disconnectTrakt()">Disconnect Account</button>
+              </div>
             </div>
-          </label>
-        </div>
-      </div>
-
-      <!-- Tab 3: Credentials -->
-      <div class="tab-pane" id="pane-trakt-creds">
-        <div id="traktCredsConnected" style="display:none;">
-          <div style="background:#111a13; border:1px solid #334436; padding:0.85rem; border-radius:8px; margin-bottom:1rem;">
-            Connected to Trakt: <strong id="traktUserName" style="color:#9edbb2;"></strong>
           </div>
-          <p style="font-size:0.92rem; color:#fca5a5; line-height:1.5; margin-bottom:1rem;">
-            This will clear all credentials and remove all the settings associated with Trakt. Resetting to the default settings.
-          </p>
-          <button class="btn-danger-pill" onclick="disconnectTrakt()">Remove Credentials</button>
+
+          <!-- Simkl Card -->
+          <div class="tracker-card" id="simklCard">
+            <div>
+              <div class="tracker-top">
+                <div class="tracker-identity">
+                  <div class="tracker-badge-icon icon-simkl">S</div>
+                  <span class="tracker-name">Simkl</span>
+                </div>
+                <span id="simklStatusPill" class="status-pill disconnected">Optional</span>
+              </div>
+              <div id="simklUserInfo" class="tracker-user" style="display:none;">
+                Status: <strong style="color:#34d399;">Connected</strong>
+              </div>
+            </div>
+
+            <div>
+              <div id="simklActionInitial">
+                <button class="btn-connect" id="btnStartSimkl" onclick="startSimkl()">Connect Simkl</button>
+              </div>
+
+              <div id="simklCodeBox" class="auth-box" style="display:none;">
+                <p style="font-size:0.78rem; color:var(--text-muted);">Simkl PIN Code:</p>
+                <div id="simklUserCode" class="auth-code">----</div>
+                <div class="auth-actions">
+                  <a id="simklActivateLink" class="btn-auth-link" href="https://simkl.com/pin" target="_blank">1. Open PIN</a>
+                  <button class="btn-auth-copy" onclick="copySimklCode()">2. Copy</button>
+                </div>
+                <p style="font-size:0.75rem; color:#38bdf8; margin-top:0.4rem;">Waiting for approval...</p>
+              </div>
+
+              <div id="simklActionConnected" style="display:none;">
+                <button class="btn-disconnect" onclick="disconnectSimkl()">Disconnect Account</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- 2. Configuration Settings (Tabs) -->
+      <div class="panel">
+        <div class="tabs-nav">
+          <button class="tab-pill active" id="tabNavCatalogs" onclick="showTab('catalogs')">Catalogs (12 Rows)</button>
+          <button class="tab-pill" id="tabNavSync" onclick="showTab('sync')">Playback & Live Scrobbler</button>
         </div>
 
-        <div id="traktCredsDisconnected">
-          <p style="font-size:0.9rem; color:#8ea495; margin-bottom:0.75rem;">Connect your Trakt account to bypass the 1-device limit and sync library.</p>
-          <button class="code-btn" style="width:100%; padding:0.75rem;" id="btnStartTrakt" onclick="startTrakt()">Tap to Connect Trakt</button>
-          
-          <div class="code-box" id="traktCodeBox" style="display:none;">
-            <p style="font-size:0.85rem; color:#cbd5e1; margin-bottom:0.25rem;">Your activation code:</p>
-            <div class="code-display" id="traktUserCode">----</div>
-            <a class="code-btn" id="traktActivateLink" href="https://auth.trakt.tv/activate" target="_blank">1. Open Trakt Activate</a>
-            <button class="code-btn" style="margin-left:0.4rem;" onclick="copyTraktCode()">2. Copy Code</button>
-            <p style="font-size:0.8rem; color:#8ea495; margin-top:0.75rem;">Waiting for you to tap Yes on Trakt...</p>
+        <!-- Catalogs Tab -->
+        <div id="tabContentCatalogs">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <p style="font-size:0.85rem; color:var(--text-muted);">Select which rows appear in Stremio and Nuvio:</p>
+            <div style="display:flex; gap:0.4rem;">
+              <button class="btn-copy" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="toggleAll(true)">Select All</button>
+              <button class="btn-copy" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="toggleAll(false)">Deselect All</button>
+            </div>
+          </div>
+
+          <div class="catalog-group-title">
+            <span>Trakt Rows</span>
+            <span style="font-size:0.7rem; color:var(--text-dim);">8 Rows Available</span>
+          </div>
+          <div class="cat-list" id="traktCatList"></div>
+
+          <div id="simklGroupHeader" class="catalog-group-title" style="margin-top:1.25rem; display:none;">
+            <span>Simkl Rows</span>
+            <span style="font-size:0.7rem; color:var(--text-dim);">4 Rows Available</span>
+          </div>
+          <div class="cat-list" id="simklCatList" style="display:none;"></div>
+        </div>
+
+        <!-- Live Sync Tab -->
+        <div id="tabContentSync" style="display:none;">
+          <div class="sync-row">
+            <div class="sync-meta">
+              <h4>Real-time Movie Scrobbling</h4>
+              <p>Syncs movie watch progress automatically upon starting playback.</p>
+            </div>
+            <span style="color:#10b981; font-weight:700; font-size:0.85rem;">Active</span>
+          </div>
+          <div class="sync-row">
+            <div class="sync-meta">
+              <h4>Real-time TV Series Scrobbling</h4>
+              <p>Syncs exact season and episode progress to Trakt and Simkl.</p>
+            </div>
+            <span style="color:#10b981; font-weight:700; font-size:0.85rem;">Active</span>
+          </div>
+          <div class="sync-row">
+            <div class="sync-meta">
+              <h4>15-Minute Scrobble Debounce</h4>
+              <p>Prevents redundant history updates during scrubbing or restarts.</p>
+            </div>
+            <span style="color:#38bdf8; font-weight:700; font-size:0.85rem;">Protected</span>
           </div>
         </div>
+
       </div>
 
-      <div class="modal-footer">
-        <button class="btn-save" onclick="saveAndClose()">Save Settings</button>
-        <button class="btn-ghost" onclick="closeModal()">Close</button>
-      </div>
-    </div>
-
-    <!-- STREMIO / SENDER MODAL -->
-    <div class="modal-container" id="modalStremio" style="display:none;">
-      <div class="modal-header">
-        <h2 class="modal-title">Stremio & Nuvio</h2>
-        <div class="modal-section-title">Install Addon</div>
-      </div>
-
-      <p style="font-size:0.92rem; color:#cbd5e1; line-height:1.5; margin-bottom:1.25rem;">
-        Your custom multi-tracker addon is configured and ready to install. Catalogs and playback scrobbler will sync seamlessly.
-      </p>
-
-      <div style="display:flex; flex-direction:column; gap:0.75rem;">
-        <a id="stremioInstallBtn" class="code-btn" style="background:#9edbb2; color:#0f2516; text-align:center; padding:0.85rem; font-size:1.05rem; font-weight:700; border:none;" href="#">
+      <!-- 3. Install Addon Deck -->
+      <div class="install-box" id="installDeck" style="display:none;">
+        <h3 style="font-size:1.15rem; font-weight:800; color:#fff; margin-bottom:0.35rem;">Install Addon</h3>
+        <p style="font-size:0.85rem; color:#cbd5e1; margin-bottom:1rem;">Your multi-tracker manifest is ready to install into Stremio & Nuvio.</p>
+        
+        <a id="stremioInstallBtn" class="btn-install-primary" href="#">
           🚀 Install in Stremio (1-Click)
         </a>
+
+        <div class="manifest-box" id="manifestUrlDisplay"></div>
+        <button class="btn-copy" id="btnCopyManifest" onclick="copyManifestUrl()">📋 Copy Manifest URL (for Nuvio / Web)</button>
       </div>
 
-      <div style="margin-top:1.5rem;">
-        <div style="font-size:0.85rem; font-weight:600; color:#e2ece4; margin-bottom:0.4rem;">Manifest URL (for Nuvio / Stremio Web):</div>
-        <div id="stremioManifestDisplay" style="background:#111a13; border:1px solid #334436; border-radius:6px; padding:0.75rem; font-family:monospace; font-size:0.8rem; color:#9edbb2; word-break:break-all; user-select:all;"></div>
-        <button class="code-btn" id="btnCopyManifest" style="width:100%; margin-top:0.5rem;" onclick="copyManifest()">📋 Copy Manifest URL</button>
-      </div>
-
-      <div class="modal-footer">
-        <button class="btn-save" onclick="closeModal()">Done</button>
-      </div>
-    </div>
-
-    <!-- GENERAL SETTINGS MODAL -->
-    <div class="modal-container" id="modalGeneral" style="display:none;">
-      <div class="modal-header">
-        <h2 class="modal-title">SyncriBullet</h2>
-        <div class="modal-section-title">Instance Info</div>
-      </div>
-
-      <div style="font-size:0.92rem; color:#cbd5e1; line-height:1.6;">
-        <p style="margin-bottom:0.75rem;"><strong>Engine:</strong> Cloudflare Serverless Edge Worker</p>
-        <p style="margin-bottom:0.75rem;"><strong>Trakt Sync:</strong> Direct CORS Bypass + Scrobble Debounce</p>
-        <p style="margin-bottom:0.75rem;"><strong>Simkl Sync:</strong> RFC 8628 Device Flow + MetaHub Post-processing</p>
-        <p style="margin-bottom:0.75rem;"><strong>Security:</strong> ${accessPassword ? '🔒 Protected by Master Passcode' : '🔓 Public Instance'}</p>
-      </div>
-
-      <div class="modal-footer">
-        <button class="btn-save" onclick="closeModal()">Close</button>
-      </div>
-    </div>
-
-    <!-- LOCK MODAL -->
-    <div class="modal-container" id="modalLock" style="display:none; text-align:center;">
-      <div style="font-size:2.5rem; margin-bottom:0.5rem;">🔒</div>
-      <h2 class="modal-title">Instance Protected</h2>
-      <div class="modal-section-title">Enter Access Password</div>
-      <p style="font-size:0.85rem; color:#8ea495; margin-bottom:1rem;">This SyncriBullet instance is private. Enter your ACCESS_PASSWORD to continue.</p>
-      <input id="passInput" type="password" placeholder="Enter Access Password" onkeydown="if(event.key==='Enter') unlockDashboard()" style="width:100%; max-width:300px; padding:0.65rem; background:#111a13; border:1px solid #334436; border-radius:6px; color:#fff; text-align:center; margin-bottom:1rem;">
-      <div>
-        <button class="btn-save" onclick="unlockDashboard()">Unlock</button>
-      </div>
     </div>
 
   </div>
+
+  <div id="toast">Settings Saved</div>
 
   <script>
     const SERVER_TRAKT_CLIENT_ID = "${traktClientId}";
@@ -1263,12 +1251,8 @@ export default {
         localStorage.setItem('addon_pass', currentPassword);
         return true;
       }
-      document.getElementById('modalBackdrop').style.display = 'flex';
-      ['modalSimkl', 'modalTrakt', 'modalStremio', 'modalGeneral'].forEach(mId => {
-        const el = document.getElementById(mId);
-        if (el) el.style.display = 'none';
-      });
-      document.getElementById('modalLock').style.display = 'block';
+      document.getElementById('mainDashboard').style.display = 'none';
+      document.getElementById('lockCard').style.display = 'block';
       return false;
     }
 
@@ -1278,8 +1262,8 @@ export default {
         currentPassword = val;
         sessionStorage.setItem('addon_pass', val);
         localStorage.setItem('addon_pass', val);
-        document.getElementById('modalLock').style.display = 'none';
-        closeModal();
+        document.getElementById('lockCard').style.display = 'none';
+        document.getElementById('mainDashboard').style.display = 'flex';
         showToast('Instance Unlocked');
         updateUrls();
       } else {
@@ -1287,42 +1271,65 @@ export default {
       }
     }
 
-    function renderCatalogLists() {
-      const traktContainer = document.getElementById('traktCatGroup');
-      const simklContainer = document.getElementById('simklCatGroup');
+    function showTab(tabId) {
+      document.getElementById('tabNavCatalogs').classList.toggle('active', tabId === 'catalogs');
+      document.getElementById('tabNavSync').classList.toggle('active', tabId === 'sync');
+      document.getElementById('tabContentCatalogs').style.display = tabId === 'catalogs' ? 'block' : 'none';
+      document.getElementById('tabContentSync').style.display = tabId === 'sync' ? 'block' : 'none';
+    }
+
+    function renderCatalogs() {
+      const traktContainer = document.getElementById('traktCatList');
+      const simklContainer = document.getElementById('simklCatList');
+      const simklHeader = document.getElementById('simklGroupHeader');
+
       traktContainer.innerHTML = '';
       simklContainer.innerHTML = '';
 
+      const isSimklActive = !!simklToken;
+      simklHeader.style.display = isSimklActive ? 'flex' : 'none';
+      simklContainer.style.display = isSimklActive ? 'flex' : 'none';
+
       CATALOG_DEFINITIONS.forEach(cat => {
         const isChecked = selectedCatalogs === null ? true : selectedCatalogs.includes(cat.id);
-        const label = document.createElement('label');
-        label.className = 'cat-item';
+        const item = document.createElement('div');
+        item.className = 'cat-item';
+
+        const left = document.createElement('div');
+        left.className = 'cat-left';
 
         const chk = document.createElement('input');
         chk.type = 'checkbox';
         chk.id = 'chk-' + cat.id;
         chk.checked = isChecked;
-        chk.onchange = () => onCatalogToggle(cat.id, chk.checked);
+        chk.onchange = (e) => {
+          e.stopPropagation();
+          onCatalogToggle(cat.id, chk.checked);
+        };
 
-        const details = document.createElement('div');
-        details.className = 'cat-details';
+        const title = document.createElement('span');
+        title.className = 'cat-title';
+        title.innerText = cat.title;
 
-        const name = document.createElement('span');
-        name.className = 'cat-name';
-        name.innerText = cat.title;
+        left.appendChild(chk);
+        left.appendChild(title);
 
         const type = document.createElement('span');
         type.className = 'cat-type';
         type.innerText = cat.type;
 
-        details.appendChild(name);
-        details.appendChild(type);
+        item.appendChild(left);
+        item.appendChild(type);
 
-        label.appendChild(chk);
-        label.appendChild(details);
+        item.onclick = (e) => {
+          if (e.target !== chk) {
+            chk.checked = !chk.checked;
+            onCatalogToggle(cat.id, chk.checked);
+          }
+        };
 
-        if (cat.group === 'trakt') traktContainer.appendChild(label);
-        else if (cat.group === 'simkl') simklContainer.appendChild(label);
+        if (cat.group === 'trakt') traktContainer.appendChild(item);
+        else if (cat.group === 'simkl') simklContainer.appendChild(item);
       });
     }
 
@@ -1339,69 +1346,16 @@ export default {
       updateUrls();
     }
 
-    function toggleGroupCatalogs(group, select) {
-      if (selectedCatalogs === null) {
-        selectedCatalogs = CATALOG_DEFINITIONS.map(c => c.id);
-      }
-      const groupCats = CATALOG_DEFINITIONS.filter(c => c.group === group);
-      groupCats.forEach(cat => {
-        const chk = document.getElementById('chk-' + cat.id);
+    function toggleAll(select) {
+      if (select) selectedCatalogs = CATALOG_DEFINITIONS.map(c => c.id);
+      else selectedCatalogs = [];
+      CATALOG_DEFINITIONS.forEach(c => {
+        const chk = document.getElementById('chk-' + c.id);
         if (chk) chk.checked = select;
-        if (select) {
-          if (!selectedCatalogs.includes(cat.id)) selectedCatalogs.push(cat.id);
-        } else {
-          selectedCatalogs = selectedCatalogs.filter(id => id !== cat.id);
-        }
       });
       localStorage.setItem('selected_catalogs', JSON.stringify(selectedCatalogs));
       updateUrls();
-    }
-
-    function openModal(id) {
-      document.getElementById('modalBackdrop').style.display = 'flex';
-      ['modalSimkl', 'modalTrakt', 'modalStremio', 'modalGeneral'].forEach(mId => {
-        const el = document.getElementById(mId);
-        if (el) el.style.display = 'none';
-      });
-
-      if (id === 'simkl') {
-        document.getElementById('modalSimkl').style.display = 'block';
-        switchTab('simkl', 'catalogs');
-      } else if (id === 'trakt') {
-        document.getElementById('modalTrakt').style.display = 'block';
-        switchTab('trakt', 'catalogs');
-      } else if (id === 'stremio' || id === 'nuvio') {
-        document.getElementById('modalStremio').style.display = 'block';
-      } else if (id === 'general') {
-        document.getElementById('modalGeneral').style.display = 'block';
-      }
-    }
-
-    function closeModal() {
-      document.getElementById('modalBackdrop').style.display = 'none';
-    }
-
-    function handleBackdropClick(e) {
-      if (SERVER_ACCESS_PASSWORD && !currentPassword) return;
-      if (e.target.id === 'modalBackdrop') {
-        closeModal();
-      }
-    }
-
-    function switchTab(modalName, tabName) {
-      ['catalogs', 'sync', 'creds'].forEach(t => {
-        const btn = document.getElementById('tabBtn-' + modalName + '-' + t);
-        const pane = document.getElementById('pane-' + modalName + '-' + t);
-        if (btn && pane) {
-          if (t === tabName) {
-            btn.classList.add('tab-active');
-            pane.classList.add('pane-active');
-          } else {
-            btn.classList.remove('tab-active');
-            pane.classList.remove('pane-active');
-          }
-        }
-      });
+      showToast(select ? 'All Catalogs Enabled' : 'All Catalogs Disabled');
     }
 
     function showToast(msg) {
@@ -1411,15 +1365,9 @@ export default {
       setTimeout(() => { t.style.display = 'none'; }, 2000);
     }
 
-    function saveAndClose() {
-      closeModal();
-      showToast('Settings Saved!');
-      updateUrls();
-    }
-
     async function startTrakt() {
       const btn = document.getElementById('btnStartTrakt');
-      btn.innerText = 'Requesting code...';
+      btn.innerText = 'Requesting...';
       btn.disabled = true;
 
       const clientId = activeTraktClientId || SERVER_TRAKT_CLIENT_ID;
@@ -1454,21 +1402,21 @@ export default {
 
         document.getElementById('traktUserCode').innerText = data.user_code;
         document.getElementById('traktActivateLink').href = data.verification_url || 'https://auth.trakt.tv/activate';
-        document.getElementById('btnStartTrakt').style.display = 'none';
+        document.getElementById('traktActionInitial').style.display = 'none';
         document.getElementById('traktCodeBox').style.display = 'block';
 
         pollTraktToken(data.device_code, data.interval || 6, clientId);
       } catch (e) {
         alert(e.message);
         btn.disabled = false;
-        btn.innerText = 'Tap to Connect Trakt';
+        btn.innerText = 'Connect Trakt';
       }
     }
 
     function copyTraktCode() {
       const code = document.getElementById('traktUserCode').innerText;
       navigator.clipboard.writeText(code);
-      showToast('Code copied: ' + code);
+      showToast('Copied: ' + code);
     }
 
     function pollTraktToken(deviceCode, interval, clientId) {
@@ -1524,7 +1472,7 @@ export default {
             localStorage.setItem('trakt_token', traktToken);
             localStorage.setItem('trakt_user', traktUser);
 
-            renderCredentialsState();
+            renderTrackersState();
             updateUrls();
             showToast('Trakt Connected!');
           }
@@ -1537,14 +1485,14 @@ export default {
       traktUser = '';
       localStorage.removeItem('trakt_token');
       localStorage.removeItem('trakt_user');
-      renderCredentialsState();
+      renderTrackersState();
       updateUrls();
       showToast('Trakt Disconnected');
     }
 
     async function startSimkl() {
       const btn = document.getElementById('btnStartSimkl');
-      btn.innerText = 'Requesting Simkl PIN...';
+      btn.innerText = 'Requesting...';
       btn.disabled = true;
 
       const clientId = activeSimklClientId || SERVER_SIMKL_CLIENT_ID;
@@ -1579,21 +1527,21 @@ export default {
         if (actLink) {
           actLink.href = data.verification_uri_complete || data.verification_uri || 'https://simkl.com/pin';
         }
-        document.getElementById('btnStartSimkl').style.display = 'none';
+        document.getElementById('simklActionInitial').style.display = 'none';
         document.getElementById('simklCodeBox').style.display = 'block';
 
         pollSimklToken(data.device_code, data.interval || 5, clientId);
       } catch (e) {
         alert(e.message);
         btn.disabled = false;
-        btn.innerText = 'Tap to Connect Simkl';
+        btn.innerText = 'Connect Simkl';
       }
     }
 
     function copySimklCode() {
       const code = document.getElementById('simklUserCode').innerText;
       navigator.clipboard.writeText(code);
-      showToast('Simkl Code copied: ' + code);
+      showToast('Copied: ' + code);
     }
 
     function pollSimklToken(deviceCode, interval, clientId) {
@@ -1637,7 +1585,8 @@ export default {
             clearInterval(simklPollInterval);
             simklToken = token;
             localStorage.setItem('simkl_token', simklToken);
-            renderCredentialsState();
+            renderTrackersState();
+            renderCatalogs();
             updateUrls();
             showToast('Simkl Connected!');
           }
@@ -1648,56 +1597,80 @@ export default {
     function disconnectSimkl() {
       simklToken = '';
       localStorage.removeItem('simkl_token');
-      renderCredentialsState();
+      renderTrackersState();
+      renderCatalogs();
       updateUrls();
       showToast('Simkl Disconnected');
     }
 
-    function onSimklTokenInput() {
-      const val = document.getElementById('simklTokenInput').value.trim();
-      simklToken = val;
-      if (val) localStorage.setItem('simkl_token', val);
-      else localStorage.removeItem('simkl_token');
-      renderCredentialsState();
-      updateUrls();
-    }
+    function renderTrackersState() {
+      // Trakt UI
+      const traktCard = document.getElementById('traktCard');
+      const traktPill = document.getElementById('traktStatusPill');
+      const traktUserBox = document.getElementById('traktUserInfo');
+      const traktInit = document.getElementById('traktActionInitial');
+      const traktCode = document.getElementById('traktCodeBox');
+      const traktConn = document.getElementById('traktActionConnected');
 
-    function renderCredentialsState() {
-      // Trakt
-      const traktDot = document.getElementById('traktStatusDot');
       if (traktToken) {
-        if (traktDot) traktDot.classList.add('connected');
-        document.getElementById('traktCredsConnected').style.display = 'block';
-        document.getElementById('traktCredsDisconnected').style.display = 'none';
-        document.getElementById('traktUserName').innerText = traktUser ? '@' + traktUser : 'Active';
+        traktCard.classList.add('active');
+        traktPill.className = 'status-pill connected';
+        traktPill.innerHTML = '<span class="pulse-dot"></span> Connected';
+        traktUserBox.style.display = 'block';
+        document.getElementById('traktUsername').innerText = traktUser ? '@' + traktUser : 'Active';
+        traktInit.style.display = 'none';
+        traktCode.style.display = 'none';
+        traktConn.style.display = 'block';
       } else {
-        if (traktDot) traktDot.classList.remove('connected');
-        document.getElementById('traktCredsConnected').style.display = 'none';
-        document.getElementById('traktCredsDisconnected').style.display = 'block';
+        traktCard.classList.remove('active');
+        traktPill.className = 'status-pill disconnected';
+        traktPill.innerText = 'Not Connected';
+        traktUserBox.style.display = 'none';
+        traktInit.style.display = 'block';
+        traktCode.style.display = 'none';
+        traktConn.style.display = 'none';
       }
 
-      // Simkl
-      const simklDot = document.getElementById('simklStatusDot');
+      // Simkl UI
+      const simklCard = document.getElementById('simklCard');
+      const simklPill = document.getElementById('simklStatusPill');
+      const simklUserBox = document.getElementById('simklUserInfo');
+      const simklInit = document.getElementById('simklActionInitial');
+      const simklCode = document.getElementById('simklCodeBox');
+      const simklConn = document.getElementById('simklActionConnected');
+
       if (simklToken) {
-        if (simklDot) simklDot.classList.add('connected');
-        document.getElementById('simklCredsConnected').style.display = 'block';
-        document.getElementById('simklCredsDisconnected').style.display = 'none';
+        simklCard.classList.add('active');
+        simklPill.className = 'status-pill connected';
+        simklPill.innerHTML = '<span class="pulse-dot"></span> Connected';
+        simklUserBox.style.display = 'block';
+        simklInit.style.display = 'none';
+        simklCode.style.display = 'none';
+        simklConn.style.display = 'block';
       } else {
-        if (simklDot) simklDot.classList.remove('connected');
-        document.getElementById('simklCredsConnected').style.display = 'none';
-        document.getElementById('simklCredsDisconnected').style.display = 'block';
+        simklCard.classList.remove('active');
+        simklPill.className = 'status-pill disconnected';
+        simklPill.innerText = 'Optional';
+        simklUserBox.style.display = 'none';
+        simklInit.style.display = 'block';
+        simklCode.style.display = 'none';
+        simklConn.style.display = 'none';
       }
     }
 
-    function copyManifest() {
-      const url = document.getElementById('stremioManifestDisplay').innerText;
+    function copyManifestUrl() {
+      const url = document.getElementById('manifestUrlDisplay').innerText;
       navigator.clipboard.writeText(url);
       const btn = document.getElementById('btnCopyManifest');
       btn.innerText = '✓ Copied to Clipboard!';
-      setTimeout(() => { btn.innerText = '📋 Copy Manifest URL'; }, 2000);
+      setTimeout(() => { btn.innerText = '📋 Copy Manifest URL (for Nuvio / Web)'; }, 2000);
     }
 
     function updateUrls() {
+      const isConnected = !!traktToken || !!simklToken;
+      document.getElementById('installDeck').style.display = isConnected ? 'block' : 'none';
+      if (!isConnected) return;
+
       const activeCatalogs = selectedCatalogs === null ? CATALOG_DEFINITIONS.map(c => c.id) : selectedCatalogs;
 
       const configObj = {
@@ -1715,7 +1688,7 @@ export default {
       const manifest = origin + '/' + enc + '/manifest.json';
       const stremio = manifest.replace('https://', 'stremio://').replace('http://', 'stremio://');
 
-      document.getElementById('stremioManifestDisplay').innerText = manifest;
+      document.getElementById('manifestUrlDisplay').innerText = manifest;
       document.getElementById('stremioInstallBtn').href = stremio;
     }
 
@@ -1744,8 +1717,8 @@ export default {
         try { selectedCatalogs = JSON.parse(savedCats); } catch (_) {}
       }
 
-      renderCatalogLists();
-      renderCredentialsState();
+      renderTrackersState();
+      renderCatalogs();
       updateUrls();
     }
 
