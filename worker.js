@@ -160,7 +160,7 @@ function buildManifest(config) {
 
   return {
     id: 'org.syncribullet.multisync',
-    version: '2.4.0',
+    version: '2.4.1',
     name: 'Trakt Multi-Device Sync',
     description: 'Syncs Trakt and Simkl Watchlists, Continue Watching, and History to Stremio and Nuvio across all devices without account logouts.',
     logo: 'https://raw.githubusercontent.com/nepalanurag/stremio-trakt-sync/main/icon.svg',
@@ -579,7 +579,7 @@ export default {
       <button class="btn" style="max-width:320px; margin:0 auto;" onclick="unlockDashboard()">Unlock Configuration</button>
     </div>
 
-    <div id="mainDashboard">
+    <div id="mainDashboard" style="display:\${accessPassword ? 'none' : 'block'};">
       <div class="header-row">
         <img src="/icon.svg" alt="logo">
         <h1>Trakt Multi-Device Sync</h1>
@@ -707,9 +707,12 @@ export default {
         return;
       }
       const urlKey = new URLSearchParams(window.location.search).get('key') || new URLSearchParams(window.location.search).get('pass');
-      const savedPass = sessionStorage.getItem('addon_pass') || localStorage.getItem('addon_pass');
+      const savedPass = sessionStorage.getItem('addon_pass') || localStorage.getItem('addon_pass') || (INITIAL_CONFIG && INITIAL_CONFIG.pass);
       if (urlKey === SERVER_ACCESS_PASSWORD || savedPass === SERVER_ACCESS_PASSWORD) {
         currentPassword = SERVER_ACCESS_PASSWORD;
+        sessionStorage.setItem('addon_pass', currentPassword);
+        localStorage.setItem('addon_pass', currentPassword);
+        document.getElementById('lockSection').style.display = 'none';
         document.getElementById('mainDashboard').style.display = 'block';
       } else {
         document.getElementById('mainDashboard').style.display = 'none';
@@ -917,6 +920,8 @@ export default {
         try {
           let tokenData = null;
 
+          let directAttempted = false;
+
           // Method 1: Direct browser polling
           try {
             const directRes = await fetch('https://api.trakt.tv/oauth/device/token', {
@@ -932,13 +937,14 @@ export default {
                 client_id: clientId
               })
             });
+            directAttempted = true;
             if (directRes.ok) {
               tokenData = await directRes.json();
             }
           } catch (_) {}
 
-          // Method 2: Worker proxy polling fallback
-          if (!tokenData) {
+          // Method 2: Worker proxy polling fallback only if direct network failed
+          if (!tokenData && !directAttempted) {
             const res = await fetch('/api/auth/token', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -1088,6 +1094,8 @@ export default {
         try {
           let token = null;
 
+          let directAttempted = false;
+
           // Method 1: Direct Simkl OAuth2 Token Polling from Browser
           if (clientId && deviceCode) {
             try {
@@ -1100,6 +1108,7 @@ export default {
                   grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
                 })
               });
+              directAttempted = true;
               if (directRes.ok) {
                 const directData = await directRes.json();
                 if (directData.access_token) {
@@ -1109,8 +1118,8 @@ export default {
             } catch (_) {}
           }
 
-          // Method 2: Worker proxy fallback
-          if (!token) {
+          // Method 2: Worker proxy fallback only if direct network failed
+          if (!token && !directAttempted) {
             const res = await fetch('/api/simkl/token', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
