@@ -160,7 +160,7 @@ function buildManifest(config) {
 
   return {
     id: 'org.syncribullet.multisync',
-    version: '2.4.1',
+    version: '2.4.2',
     name: 'Trakt Multi-Device Sync',
     description: 'Syncs Trakt and Simkl Watchlists, Continue Watching, and History to Stremio and Nuvio across all devices without account logouts.',
     logo: 'https://raw.githubusercontent.com/nepalanurag/stremio-trakt-sync/main/icon.svg',
@@ -575,11 +575,11 @@ export default {
       <div style="font-size:2.5rem; margin-bottom:0.5rem;">🔒</div>
       <h2 style="color:#38bdf8; margin:0 0 0.5rem 0; font-size:1.3rem;">Private Addon Instance</h2>
       <p style="font-size:0.85rem; color:#94a3b8; margin:0 0 1rem 0;">This instance is protected with a master passcode. Enter your ACCESS_PASSWORD to configure.</p>
-      <input id="passInput" type="password" placeholder="Enter Access Password" style="max-width:320px; margin:0 auto 0.75rem auto; text-align:center;">
+      <input id="passInput" type="password" placeholder="Enter Access Password" onkeydown="if(event.key==='Enter') unlockDashboard()" style="max-width:320px; margin:0 auto 0.75rem auto; text-align:center;">
       <button class="btn" style="max-width:320px; margin:0 auto;" onclick="unlockDashboard()">Unlock Configuration</button>
     </div>
 
-    <div id="mainDashboard" style="display:\${accessPassword ? 'none' : 'block'};">
+    <div id="mainDashboard" style="display:none;">
       <div class="header-row">
         <img src="/icon.svg" alt="logo">
         <h1>Trakt Multi-Device Sync</h1>
@@ -703,6 +703,7 @@ export default {
 
     function checkLock() {
       if (!SERVER_ACCESS_PASSWORD) {
+        document.getElementById('lockSection').style.display = 'none';
         document.getElementById('mainDashboard').style.display = 'block';
         return;
       }
@@ -1214,10 +1215,10 @@ export default {
         pass: SERVER_ACCESS_PASSWORD ? currentPassword : undefined
       };
 
-      const enc = btoa(JSON.stringify(configObj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const enc = btoa(JSON.stringify(configObj)).split('+').join('-').split('/').join('_').replace(/=+$/, '');
       const origin = window.location.origin;
       const manifest = origin + '/' + enc + '/manifest.json';
-      const stremio = manifest.replace(/^https?:\/\//, 'stremio://');
+      const stremio = manifest.replace('https://', 'stremio://').replace('http://', 'stremio://');
 
       document.getElementById('manifestUrl').innerText = manifest;
       document.getElementById('stremioLink').href = stremio;
