@@ -1207,6 +1207,18 @@ export default {
       </div>
     </div>
 
+    <!-- LOCK MODAL -->
+    <div class="modal-container" id="modalLock" style="display:none; text-align:center;">
+      <div style="font-size:2.5rem; margin-bottom:0.5rem;">🔒</div>
+      <h2 class="modal-title">Instance Protected</h2>
+      <div class="modal-section-title">Enter Access Password</div>
+      <p style="font-size:0.85rem; color:#8ea495; margin-bottom:1rem;">This SyncriBullet instance is private. Enter your ACCESS_PASSWORD to continue.</p>
+      <input id="passInput" type="password" placeholder="Enter Access Password" onkeydown="if(event.key==='Enter') unlockDashboard()" style="width:100%; max-width:300px; padding:0.65rem; background:#111a13; border:1px solid #334436; border-radius:6px; color:#fff; text-align:center; margin-bottom:1rem;">
+      <div>
+        <button class="btn-save" onclick="unlockDashboard()">Unlock</button>
+      </div>
+    </div>
+
   </div>
 
   <script>
@@ -1251,7 +1263,28 @@ export default {
         localStorage.setItem('addon_pass', currentPassword);
         return true;
       }
+      document.getElementById('modalBackdrop').style.display = 'flex';
+      ['modalSimkl', 'modalTrakt', 'modalStremio', 'modalGeneral'].forEach(mId => {
+        const el = document.getElementById(mId);
+        if (el) el.style.display = 'none';
+      });
+      document.getElementById('modalLock').style.display = 'block';
       return false;
+    }
+
+    function unlockDashboard() {
+      const val = document.getElementById('passInput').value.trim();
+      if (val === SERVER_ACCESS_PASSWORD) {
+        currentPassword = val;
+        sessionStorage.setItem('addon_pass', val);
+        localStorage.setItem('addon_pass', val);
+        document.getElementById('modalLock').style.display = 'none';
+        closeModal();
+        showToast('Instance Unlocked');
+        updateUrls();
+      } else {
+        alert('Invalid access password');
+      }
     }
 
     function renderCatalogLists() {
@@ -1349,6 +1382,7 @@ export default {
     }
 
     function handleBackdropClick(e) {
+      if (SERVER_ACCESS_PASSWORD && !currentPassword) return;
       if (e.target.id === 'modalBackdrop') {
         closeModal();
       }
