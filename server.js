@@ -7,10 +7,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 7070;
-const DEFAULT_TRAKT_CLIENT_ID = '';
-const TRAKT_CLIENT_ID = process.env.TRAKT_CLIENT_ID || DEFAULT_TRAKT_CLIENT_ID;
+const TRAKT_CLIENT_ID = (process.env.TRAKT_CLIENT_ID || '').trim();
+const SIMKL_CLIENT_ID = (process.env.SIMKL_CLIENT_ID || '').trim();
 const TRAKT_API_URL = 'https://api.trakt.tv';
 const SIMKL_API_URL = 'https://api.simkl.com';
+const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
 const CONFIG_FILE = path.join(__dirname, 'config.json');
 
 let savedConfig = {};
@@ -36,52 +38,138 @@ function shouldSync(key) {
   return true;
 }
 
-const MANIFEST_TEMPLATE = {
-  id: 'org.syncribullet.multisync',
-  version: '2.1.0',
-  name: 'Trakt & Simkl Multi-Device Sync',
-  description: 'Tap-and-setup Trakt scrobbler and catalog sync across unlimited Stremio & Nuvio devices.',
-  resources: ['catalog', 'subtitles'],
-  types: ['movie', 'series'],
-  catalogs: [
-    {
-      type: 'movie',
-      id: 'trakt_playback_movies',
-      name: 'Trakt: Continue Watching',
-      extra: [{ name: 'skip', isRequired: false }]
-    },
-    {
-      type: 'series',
-      id: 'trakt_playback_series',
-      name: 'Trakt: Continue Watching',
-      extra: [{ name: 'skip', isRequired: false }]
-    },
-    {
-      type: 'movie',
-      id: 'trakt_watchlist_movies',
-      name: 'Trakt: Watchlist',
-      extra: [{ name: 'skip', isRequired: false }]
-    },
-    {
-      type: 'series',
-      id: 'trakt_watchlist_series',
-      name: 'Trakt: Watchlist',
-      extra: [{ name: 'skip', isRequired: false }]
-    },
-    {
-      type: 'movie',
-      id: 'trakt_history_movies',
-      name: 'Trakt: History',
-      extra: [{ name: 'skip', isRequired: false }]
-    },
-    {
-      type: 'series',
-      id: 'trakt_history_series',
-      name: 'Trakt: History',
-      extra: [{ name: 'skip', isRequired: false }]
-    }
-  ]
-};
+const GENRE_OPTIONS = [
+  'Action', 'Adventure', 'Animation', 'Comedy', 'Crime',
+  'Documentary', 'Drama', 'Family', 'Fantasy', 'History',
+  'Horror', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western'
+];
+
+const BASE_CATALOGS = [
+  {
+    type: 'series',
+    id: 'trakt_playback_series',
+    name: 'Trakt - Continue Watching',
+    extra: [{ name: 'skip', isRequired: false }]
+  },
+  {
+    type: 'movie',
+    id: 'trakt_playback_movies',
+    name: 'Trakt - Continue Watching',
+    extra: [{ name: 'skip', isRequired: false }]
+  },
+  {
+    type: 'movie',
+    id: 'trakt_watchlist_movies',
+    name: 'Trakt - Watchlist',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ]
+  },
+  {
+    type: 'series',
+    id: 'trakt_watchlist_series',
+    name: 'Trakt - Watchlist',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ]
+  },
+  {
+    type: 'movie',
+    id: 'trakt_history_movies',
+    name: 'Trakt - History',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ]
+  },
+  {
+    type: 'series',
+    id: 'trakt_history_series',
+    name: 'Trakt - History',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ]
+  },
+  {
+    type: 'movie',
+    id: 'trakt_collection_movies',
+    name: 'Trakt - Collection',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ]
+  },
+  {
+    type: 'series',
+    id: 'trakt_collection_series',
+    name: 'Trakt - Collection',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ]
+  }
+];
+
+const SIMKL_CATALOGS = [
+  {
+    type: 'series',
+    id: 'simkl_watching_shows',
+    name: 'Simkl - Currently Watching',
+    extra: [{ name: 'skip', isRequired: false }],
+    extraSupported: ['skip']
+  },
+  {
+    type: 'movie',
+    id: 'simkl_plantowatch_movies',
+    name: 'Simkl - Plan to Watch',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ],
+    extraSupported: ['genre', 'skip']
+  },
+  {
+    type: 'series',
+    id: 'simkl_plantowatch_shows',
+    name: 'Simkl - Plan to Watch',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ],
+    extraSupported: ['genre', 'skip']
+  },
+  {
+    type: 'movie',
+    id: 'simkl_completed_movies',
+    name: 'Simkl - Completed',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ],
+    extraSupported: ['genre', 'skip']
+  }
+];
+
+function buildManifest(config) {
+  const catalogs = [...BASE_CATALOGS];
+  if (config && config.simklToken) {
+    catalogs.push(...SIMKL_CATALOGS);
+  }
+  return {
+    id: 'org.syncribullet.multisync',
+    version: '2.3.0',
+    name: 'Trakt Multi-Device Sync',
+    description: 'Syncs Trakt and Simkl Watchlists, Continue Watching, and History to Stremio and Nuvio across all devices without account logouts.',
+    logo: 'https://raw.githubusercontent.com/nepalanurag/stremio-trakt-sync/main/icon.svg',
+    background: 'https://images.metahub.space/background/medium/tt0903747/img',
+    resources: ['catalog', 'subtitles'],
+    types: ['movie', 'series'],
+    catalogs
+  };
+}
 
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
@@ -131,12 +219,73 @@ function parseMediaId(type, idWithExt) {
   return { type: 'series', imdbId: rawId };
 }
 
+function normalizeGenre(g) {
+  if (!g) return '';
+  const clean = g.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (clean === 'scifi' || clean === 'sciencefiction') return 'sci-fi';
+  return g.charAt(0).toUpperCase() + g.slice(1).replace('-', ' ');
+}
+
+function mapToMeta(item, type) {
+  const target = item.movie || item.show;
+  if (!target || !target.ids) return null;
+
+  const imdbId = target.ids.imdb;
+  const id = imdbId || `trakt:${target.ids.trakt}`;
+  const title = target.title || 'Unknown Title';
+  const year = target.year ? String(target.year) : undefined;
+
+  let poster = undefined;
+  if (target.images?.poster?.[0]) {
+    poster = `https://${target.images.poster[0]}`;
+  } else if (imdbId) {
+    poster = `https://images.metahub.space/poster/medium/${imdbId}/img`;
+  }
+
+  let background = undefined;
+  if (target.images?.fanart?.[0]) {
+    background = `https://${target.images.fanart[0]}`;
+  } else if (imdbId) {
+    background = `https://images.metahub.space/background/medium/${imdbId}/img`;
+  }
+
+  let logo = undefined;
+  if (target.images?.logo?.[0]) {
+    logo = `https://${target.images.logo[0]}`;
+  } else if (imdbId) {
+    logo = `https://images.metahub.space/logo/medium/${imdbId}/img`;
+  }
+
+  const imdbRating = target.rating ? (Math.round(target.rating * 10) / 10).toFixed(1) : undefined;
+
+  let genres = undefined;
+  if (Array.isArray(target.genres) && target.genres.length > 0) {
+    genres = target.genres.map(normalizeGenre).filter(Boolean);
+  }
+
+  return {
+    id,
+    type,
+    name: title,
+    poster,
+    background,
+    logo,
+    description: target.overview || '',
+    releaseInfo: year,
+    imdbRating,
+    genres,
+    trailer: target.trailer || undefined
+  };
+}
+
 async function fetchTrakt(endpoint, token, clientId, method = 'GET', body = null) {
   const url = `${TRAKT_API_URL}${endpoint}`;
   const options = {
     method,
     headers: {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'User-Agent': USER_AGENT,
       'trakt-api-version': '2',
       'trakt-api-key': clientId,
       'Authorization': `Bearer ${token}`
@@ -151,28 +300,9 @@ async function fetchTrakt(endpoint, token, clientId, method = 'GET', body = null
   return response.json();
 }
 
-async function fetchSimkl(endpoint, token, method = 'GET', body = null) {
-  const url = `${SIMKL_API_URL}${endpoint}`;
-  const options = {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    }
-  };
-  if (body) options.body = JSON.stringify(body);
-  const response = await fetch(url, options);
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Simkl API error: ${response.status} ${response.statusText} (${errText})`);
-  }
-  return response.json();
-}
-
 async function performDynamicWatchSync(media, config) {
   const traktToken = config.traktToken || config.token;
   const traktClientId = config.traktClientId || config.clientId || TRAKT_CLIENT_ID;
-  const simklToken = config.simklToken;
 
   if (traktToken && traktClientId && media.imdbId.startsWith('tt')) {
     try {
@@ -198,83 +328,59 @@ async function performDynamicWatchSync(media, config) {
       console.error('[Dynamic Sync Error - Trakt]:', err.message);
     }
   }
-
-  if (simklToken && media.imdbId.startsWith('tt')) {
-    try {
-      let simklPayload = {};
-      if (media.type === 'movie') {
-        simklPayload = { movies: [{ ids: { imdb: media.imdbId } }] };
-      } else if (media.season !== undefined && media.episode !== undefined) {
-        simklPayload = {
-          shows: [{
-            ids: { imdb: media.imdbId },
-            seasons: [{
-              number: media.season,
-              episodes: [{ number: media.episode }]
-            }]
-          }]
-        };
-      }
-      if (Object.keys(simklPayload).length > 0) {
-        await fetchSimkl('/sync/history', simklToken, 'POST', simklPayload);
-        console.log(`[Dynamic Sync] Marked ${media.imdbId} on Simkl`);
-      }
-    } catch (err) {
-      console.error('[Dynamic Sync Error - Simkl]:', err.message);
-    }
-  }
 }
 
-function mapToMeta(item, type) {
-  const target = item.movie || item.show;
-  if (!target || !target.ids) return null;
-  const imdbId = target.ids.imdb;
-  const id = imdbId || `trakt:${target.ids.trakt}`;
-  return {
-    id,
-    type,
-    name: target.title || 'Unknown Title',
-    poster: imdbId ? `https://images.metahub.space/poster/medium/${imdbId}/img` : undefined,
-    year: target.year ? String(target.year) : undefined,
-    description: target.overview || ''
-  };
-}
-
-async function handleCatalog(catalogId, type, skip, config) {
+async function handleCatalog(catalogId, type, extraSegment, config) {
   const token = config.traktToken || config.token;
   const clientId = config.traktClientId || config.clientId || TRAKT_CLIENT_ID;
   if (!token || !clientId) return [];
 
+  let skip = 0;
+  let selectedGenre = null;
+
+  if (extraSegment) {
+    const skipMatch = extraSegment.match(/skip=(\d+)/);
+    if (skipMatch) skip = parseInt(skipMatch[1], 10);
+
+    const genreMatch = extraSegment.match(/genre=([^&]+)/);
+    if (genreMatch) selectedGenre = decodeURIComponent(genreMatch[1]).toLowerCase();
+  }
+
   const page = Math.floor(skip / 20) + 1;
   const limit = 20;
+
+  let endpoint = '';
+  if (catalogId === 'trakt_playback_movies') endpoint = '/sync/playback/movies?extended=full';
+  else if (catalogId === 'trakt_playback_series') endpoint = '/sync/playback/episodes?extended=full';
+  else if (catalogId === 'trakt_watchlist_movies') endpoint = `/sync/watchlist/movies?extended=full&page=${page}&limit=${limit}`;
+  else if (catalogId === 'trakt_watchlist_series') endpoint = `/sync/watchlist/shows?extended=full&page=${page}&limit=${limit}`;
+  else if (catalogId === 'trakt_history_movies') endpoint = `/sync/history/movies?extended=full&page=${page}&limit=${limit}`;
+  else if (catalogId === 'trakt_history_series') endpoint = `/sync/history/shows?extended=full&page=${page}&limit=${limit}`;
+  else if (catalogId === 'trakt_collection_movies') endpoint = `/sync/collection/movies?extended=full&page=${page}&limit=${limit}`;
+  else if (catalogId === 'trakt_collection_series') endpoint = `/sync/collection/shows?extended=full&page=${page}&limit=${limit}`;
+  if (!endpoint) return [];
+
+  const data = await fetchTrakt(endpoint, token, clientId);
   let items = [];
 
-  if (catalogId === 'trakt_playback_movies' && type === 'movie') {
-    const data = await fetchTrakt(`/sync/playback/movies?extended=full`, token, clientId);
-    items = data.map(i => mapToMeta(i, 'movie')).filter(Boolean);
-  } else if (catalogId === 'trakt_playback_series' && type === 'series') {
-    const data = await fetchTrakt(`/sync/playback/episodes?extended=full`, token, clientId);
-    const seenShows = new Set();
-    items = [];
+  if (catalogId === 'trakt_playback_series') {
+    const seen = new Set();
     for (const item of data) {
-      if (item.show?.ids?.trakt && !seenShows.has(item.show.ids.trakt)) {
-        seenShows.add(item.show.ids.trakt);
+      if (item.show?.ids?.trakt && !seen.has(item.show.ids.trakt)) {
+        seen.add(item.show.ids.trakt);
         const meta = mapToMeta(item, 'series');
         if (meta) items.push(meta);
       }
     }
-  } else if (catalogId === 'trakt_watchlist_movies' && type === 'movie') {
-    const data = await fetchTrakt(`/sync/watchlist/movies?extended=full&page=${page}&limit=${limit}`, token, clientId);
-    items = data.map(i => mapToMeta(i, 'movie')).filter(Boolean);
-  } else if (catalogId === 'trakt_watchlist_series' && type === 'series') {
-    const data = await fetchTrakt(`/sync/watchlist/shows?extended=full&page=${page}&limit=${limit}`, token, clientId);
-    items = data.map(i => mapToMeta(i, 'series')).filter(Boolean);
-  } else if (catalogId === 'trakt_history_movies' && type === 'movie') {
-    const data = await fetchTrakt(`/sync/history/movies?extended=full&page=${page}&limit=${limit}`, token, clientId);
-    items = data.map(i => mapToMeta(i, 'movie')).filter(Boolean);
-  } else if (catalogId === 'trakt_history_series' && type === 'series') {
-    const data = await fetchTrakt(`/sync/history/shows?extended=full&page=${page}&limit=${limit}`, token, clientId);
-    items = data.map(i => mapToMeta(i, 'series')).filter(Boolean);
+  } else {
+    items = data.map(i => mapToMeta(i, type)).filter(Boolean);
+  }
+
+  if (selectedGenre) {
+    items = items.filter(item =>
+      Array.isArray(item.genres) &&
+      item.genres.some(g => g.toLowerCase().includes(selectedGenre))
+    );
   }
 
   return items;
@@ -293,226 +399,6 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
 
-  if (pathname === '/' || pathname === '/configure') {
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Stremio Trakt Multi-Device Sync</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b0f19; color: #f1f5f9; margin: 0; padding: 1.5rem; display: flex; justify-content: center; }
-    .card { background: #161e2e; border-radius: 16px; padding: 2rem; max-width: 580px; width: 100%; box-shadow: 0 10px 35px rgba(0,0,0,0.6); border: 1px solid #1e293b; }
-    h1 { font-size: 1.5rem; color: #38bdf8; margin: 0 0 0.5rem 0; }
-    p { color: #94a3b8; font-size: 0.95rem; line-height: 1.5; margin: 0 0 1.5rem 0; }
-    .section { background: #0f172a; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem; border: 1px solid #1e293b; }
-    .section-title { font-size: 0.95rem; font-weight: 700; color: #e2e8f0; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between; }
-    .btn { background: #0284c7; color: white; border: none; border-radius: 8px; padding: 0.85rem 1.25rem; font-weight: 600; font-size: 1rem; cursor: pointer; width: 100%; text-align: center; text-decoration: none; display: block; }
-    .btn:hover { background: #0369a1; }
-    .btn-green { background: #10b981; }
-    .btn-green:hover { background: #059669; }
-    .btn-outline { background: transparent; border: 1px solid #38bdf8; color: #38bdf8; font-size: 0.9rem; padding: 0.6rem; margin-top: 0.5rem; }
-    .btn-outline:hover { background: rgba(56,189,248,0.1); }
-    .code-box { background: #020617; border: 1px dashed #38bdf8; border-radius: 8px; padding: 1.25rem; margin-top: 1rem; text-align: center; }
-    .user-code { font-size: 2.2rem; font-weight: 800; letter-spacing: 6px; color: #38bdf8; margin: 0.5rem 0; font-family: monospace; }
-    .status-text { font-size: 0.85rem; color: #94a3b8; margin: 0.5rem 0 0 0; }
-    .badge-success { background: rgba(16,185,129,0.15); border: 1px solid #10b981; color: #34d399; padding: 0.75rem; border-radius: 8px; font-weight: 600; text-align: center; margin-top: 1rem; }
-    .url-display { background: #020617; word-break: break-all; padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.8rem; color: #a5f3fc; margin-top: 0.5rem; border: 1px solid #1e293b; user-select: all; }
-    input { width: 100%; padding: 0.75rem; border: 1px solid #334155; border-radius: 6px; background: #020617; color: #fff; box-sizing: border-box; font-size: 0.9rem; margin-top: 0.4rem; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>Trakt Multi-Device Sync</h1>
-    <p>Connect Trakt once. Sync playback and catalogs across 5+ Stremio and Nuvio devices without ever getting logged out.</p>
-
-    <div class="section">
-      <div class="section-title">
-        <span>1. Trakt Account</span>
-        <span id="traktBadge" style="font-size:0.8rem; color:#94a3b8;">Not Connected</span>
-      </div>
-
-      <div id="traktInitial">
-        <button id="btnTrakt" class="btn" onclick="startTrakt()">Tap to Connect Trakt</button>
-      </div>
-
-      <div id="traktCodeBox" class="code-box" style="display:none;">
-        <p style="margin:0 0 0.25rem 0; font-size:0.85rem; color:#cbd5e1;">Your activation code:</p>
-        <div id="traktUserCode" class="user-code">----</div>
-        <a id="traktActivateLink" class="btn btn-outline" href="https://auth.trakt.tv/activate" target="_blank">1. Open Trakt Activate in New Tab</a>
-        <button class="btn btn-outline" style="border-color:#64748b; color:#cbd5e1; margin-top:0.4rem;" onclick="copyCode()">2. Copy Code to Clipboard</button>
-        <p id="traktPollStatus" class="status-text">Waiting for you to tap Yes on Trakt...</p>
-      </div>
-
-      <div id="traktConnected" class="badge-success" style="display:none;">
-        Connected to Trakt: <span id="traktUser" style="color:#fff;"></span>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">
-        <span>2. Simkl (Optional)</span>
-        <span id="simklBadge" style="font-size:0.8rem; color:#64748b;">Optional</span>
-      </div>
-      <p style="font-size:0.85rem; margin:0 0 0.5rem 0;">Cross-syncs playback to Simkl at the same time.</p>
-      <input id="simklToken" placeholder="Paste Simkl Token (or leave blank for Trakt only)" oninput="updateUrls()">
-    </div>
-
-    <div id="installSection" style="display:none; margin-top:1.5rem;">
-      <a id="stremioLink" class="btn btn-green" href="#">🚀 Install in Stremio (1-Click)</a>
-      <p style="margin:1.25rem 0 0.25rem 0; font-size:0.85rem; font-weight:600; color:#cbd5e1;">Or copy Manifest URL into Nuvio / Stremio Web:</p>
-      <div id="manifestUrl" class="url-display"></div>
-    </div>
-  </div>
-
-  <script>
-    let traktToken = '';
-    let pollInterval = null;
-
-    async function startTrakt() {
-      const btn = document.getElementById('btnTrakt');
-      btn.disabled = true;
-      btn.innerText = 'Requesting code...';
-
-      try {
-        const res = await fetch('/api/auth/start', { method: 'POST' });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to request Trakt code');
-
-        document.getElementById('traktUserCode').innerText = data.user_code;
-        document.getElementById('traktActivateLink').href = data.verification_url || 'https://auth.trakt.tv/activate';
-        document.getElementById('traktInitial').style.display = 'none';
-        document.getElementById('traktCodeBox').style.display = 'block';
-
-        pollTraktToken(data.device_code, data.interval || 6);
-      } catch (err) {
-        alert(err.message);
-        btn.disabled = false;
-        btn.innerText = 'Tap to Connect Trakt';
-      }
-    }
-
-    function copyCode() {
-      const code = document.getElementById('traktUserCode').innerText;
-      navigator.clipboard.writeText(code);
-      alert('Code ' + code + ' copied to clipboard!');
-    }
-
-    function pollTraktToken(deviceCode, interval) {
-      pollInterval = setInterval(async () => {
-        try {
-          const res = await fetch('/api/auth/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ deviceCode })
-          });
-          const data = await res.json();
-          if (res.ok && data.access_token) {
-            clearInterval(pollInterval);
-            traktToken = data.access_token;
-
-            document.getElementById('traktCodeBox').style.display = 'none';
-            document.getElementById('traktBadge').innerText = 'Connected';
-            document.getElementById('traktBadge').style.color = '#34d399';
-            document.getElementById('traktUser').innerText = data.username ? '@' + data.username : 'Active';
-            document.getElementById('traktConnected').style.display = 'block';
-            document.getElementById('installSection').style.display = 'block';
-
-            updateUrls();
-          }
-        } catch (_) {}
-      }, interval * 1000);
-    }
-
-    function updateUrls() {
-      if (!traktToken) return;
-      const simkl = document.getElementById('simklToken').value.trim();
-      const configObj = {
-        traktToken: traktToken,
-        simklToken: simkl || undefined
-      };
-
-      const enc = btoa(JSON.stringify(configObj)).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
-      const origin = window.location.origin;
-      const manifest = origin + '/' + enc + '/manifest.json';
-      const stremio = manifest.replace(/^https?:\\/\\//, 'stremio://');
-
-      document.getElementById('manifestUrl').innerText = manifest;
-      document.getElementById('stremioLink').href = stremio;
-    }
-  </script>
-</body>
-</html>`;
-    return sendHtml(res, html);
-  }
-
-  if (pathname === '/api/auth/start' && req.method === 'POST') {
-    try {
-      const traktRes = await fetch(`${TRAKT_API_URL}/oauth/device/code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: TRAKT_CLIENT_ID })
-      });
-      const data = await traktRes.json();
-      return sendJson(res, traktRes.status, data);
-    } catch (err) {
-      return sendJson(res, 500, { error: err.message });
-    }
-  }
-
-  if (pathname === '/api/auth/token' && req.method === 'POST') {
-    let body = '';
-    req.on('data', chunk => { body += chunk; });
-    req.on('end', async () => {
-      try {
-        const { deviceCode } = JSON.parse(body || '{}');
-        const traktRes = await fetch(`${TRAKT_API_URL}/oauth/device/token`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            code: deviceCode,
-            client_id: TRAKT_CLIENT_ID
-          })
-        });
-
-        if (!traktRes.ok) {
-          return sendJson(res, traktRes.status, { status: 'pending' });
-        }
-
-        const tokenData = await traktRes.json();
-        let username = '';
-        try {
-          const userRes = await fetch(`${TRAKT_API_URL}/users/me`, {
-            headers: {
-              'Content-Type': 'application/json',
-              'trakt-api-version': '2',
-              'trakt-api-key': TRAKT_CLIENT_ID,
-              'Authorization': `Bearer ${tokenData.access_token}`
-            }
-          });
-          if (userRes.ok) {
-            const userData = await userRes.json();
-            username = userData.username || '';
-          }
-        } catch (_) {}
-
-        savedConfig = { traktToken: tokenData.access_token, traktClientId: TRAKT_CLIENT_ID };
-        try {
-          fs.writeFileSync(CONFIG_FILE, JSON.stringify(savedConfig, null, 2));
-        } catch (_) {}
-
-        return sendJson(res, 200, {
-          access_token: tokenData.access_token,
-          username
-        });
-      } catch (err) {
-        return sendJson(res, 500, { error: err.message });
-      }
-    });
-    return;
-  }
-
   const parts = pathname.replace(/^\/+|\/+$/g, '').split('/');
   let config = (savedConfig.traktToken || savedConfig.token) ? savedConfig : null;
   let offset = 0;
@@ -526,7 +412,7 @@ const server = http.createServer(async (req, res) => {
   const routeParts = parts.slice(offset);
 
   if (routeParts.length === 1 && routeParts[0] === 'manifest.json') {
-    return sendJson(res, 200, MANIFEST_TEMPLATE);
+    return sendJson(res, 200, buildManifest(config));
   }
 
   if (routeParts[0] === 'subtitles' && routeParts.length >= 3) {
@@ -549,16 +435,10 @@ const server = http.createServer(async (req, res) => {
     const catalogId = idWithExt.replace(/\.json$/, '');
     const extraSegment = routeParts[3] ? routeParts[3].replace(/\.json$/, '') : '';
 
-    let skip = 0;
-    if (extraSegment && extraSegment.includes('skip=')) {
-      const match = extraSegment.match(/skip=(\d+)/);
-      if (match) skip = parseInt(match[1], 10);
-    }
-
     if (!config) return sendJson(res, 200, { metas: [] });
 
     try {
-      const metas = await handleCatalog(catalogId, type, skip, config);
+      const metas = await handleCatalog(catalogId, type, extraSegment, config);
       return sendJson(res, 200, { metas });
     } catch (err) {
       return sendJson(res, 200, { metas: [] });

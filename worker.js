@@ -1,5 +1,5 @@
 // Cloudflare Worker: Syncribullet Trakt & Multi-Tracker Addon
-// 100% Serverless, Tap-and-Setup flow with zero secrets required.
+// Polished Stremio & Nuvio Addon with Rich Watchlists, Continue Watching, and Auto-Scrobble.
 
 const DEFAULT_TRAKT_CLIENT_ID = '';
 const TRAKT_API_URL = 'https://api.trakt.tv';
@@ -7,52 +7,146 @@ const SIMKL_API_URL = 'https://api.simkl.com';
 
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-const MANIFEST = {
-  id: 'org.syncribullet.cfworker',
-  version: '2.2.0',
-  name: 'Trakt & Simkl Multi-Device Sync',
-  description: 'Tap-and-setup Trakt scrobbler and catalog sync across unlimited Stremio & Nuvio devices.',
-  resources: ['catalog', 'subtitles'],
-  types: ['movie', 'series'],
-  catalogs: [
-    {
-      type: 'movie',
-      id: 'trakt_playback_movies',
-      name: 'Trakt: Continue Watching',
-      extra: [{ name: 'skip', isRequired: false }]
-    },
-    {
-      type: 'series',
-      id: 'trakt_playback_series',
-      name: 'Trakt: Continue Watching',
-      extra: [{ name: 'skip', isRequired: false }]
-    },
-    {
-      type: 'movie',
-      id: 'trakt_watchlist_movies',
-      name: 'Trakt: Watchlist',
-      extra: [{ name: 'skip', isRequired: false }]
-    },
-    {
-      type: 'series',
-      id: 'trakt_watchlist_series',
-      name: 'Trakt: Watchlist',
-      extra: [{ name: 'skip', isRequired: false }]
-    },
-    {
-      type: 'movie',
-      id: 'trakt_history_movies',
-      name: 'Trakt: History',
-      extra: [{ name: 'skip', isRequired: false }]
-    },
-    {
-      type: 'series',
-      id: 'trakt_history_series',
-      name: 'Trakt: History',
-      extra: [{ name: 'skip', isRequired: false }]
-    }
-  ]
-};
+const GENRE_OPTIONS = [
+  'Action', 'Adventure', 'Animation', 'Comedy', 'Crime',
+  'Documentary', 'Drama', 'Family', 'Fantasy', 'History',
+  'Horror', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western'
+];
+
+const BASE_CATALOGS = [
+  {
+    type: 'series',
+    id: 'trakt_playback_series',
+    name: 'Trakt - Continue Watching',
+    extra: [{ name: 'skip', isRequired: false }],
+    extraSupported: ['skip']
+  },
+  {
+    type: 'movie',
+    id: 'trakt_playback_movies',
+    name: 'Trakt - Continue Watching',
+    extra: [{ name: 'skip', isRequired: false }],
+    extraSupported: ['skip']
+  },
+  {
+    type: 'movie',
+    id: 'trakt_watchlist_movies',
+    name: 'Trakt - Watchlist',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ],
+    extraSupported: ['genre', 'skip']
+  },
+  {
+    type: 'series',
+    id: 'trakt_watchlist_series',
+    name: 'Trakt - Watchlist',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ],
+    extraSupported: ['genre', 'skip']
+  },
+  {
+    type: 'movie',
+    id: 'trakt_history_movies',
+    name: 'Trakt - History',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ],
+    extraSupported: ['genre', 'skip']
+  },
+  {
+    type: 'series',
+    id: 'trakt_history_series',
+    name: 'Trakt - History',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ],
+    extraSupported: ['genre', 'skip']
+  },
+  {
+    type: 'movie',
+    id: 'trakt_collection_movies',
+    name: 'Trakt - Collection',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ],
+    extraSupported: ['genre', 'skip']
+  },
+  {
+    type: 'series',
+    id: 'trakt_collection_series',
+    name: 'Trakt - Collection',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ],
+    extraSupported: ['genre', 'skip']
+  }
+];
+
+const SIMKL_CATALOGS = [
+  {
+    type: 'series',
+    id: 'simkl_watching_shows',
+    name: 'Simkl - Currently Watching',
+    extra: [{ name: 'skip', isRequired: false }],
+    extraSupported: ['skip']
+  },
+  {
+    type: 'movie',
+    id: 'simkl_plantowatch_movies',
+    name: 'Simkl - Plan to Watch',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ],
+    extraSupported: ['genre', 'skip']
+  },
+  {
+    type: 'series',
+    id: 'simkl_plantowatch_shows',
+    name: 'Simkl - Plan to Watch',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ],
+    extraSupported: ['genre', 'skip']
+  },
+  {
+    type: 'movie',
+    id: 'simkl_completed_movies',
+    name: 'Simkl - Completed',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ],
+    extraSupported: ['genre', 'skip']
+  }
+];
+
+function buildManifest(config) {
+  const catalogs = [...BASE_CATALOGS];
+  if (config && config.simklToken) {
+    catalogs.push(...SIMKL_CATALOGS);
+  }
+  return {
+    id: 'org.syncribullet.multisync',
+    version: '2.3.0',
+    name: 'Trakt Multi-Device Sync',
+    description: 'Syncs Trakt and Simkl Watchlists, Continue Watching, and History to Stremio and Nuvio across all devices without account logouts.',
+    logo: 'https://raw.githubusercontent.com/nepalanurag/stremio-trakt-sync/main/icon.svg',
+    background: 'https://images.metahub.space/background/medium/tt0903747/img',
+    resources: ['catalog', 'subtitles'],
+    types: ['movie', 'series'],
+    catalogs
+  };
+}
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -91,6 +185,91 @@ function parseMediaId(type, idWithExt) {
     };
   }
   return { type: 'series', imdbId: rawId };
+}
+
+function normalizeGenre(g) {
+  if (!g) return '';
+  const clean = g.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (clean === 'scifi' || clean === 'sciencefiction') return 'sci-fi';
+  return g.charAt(0).toUpperCase() + g.slice(1).replace('-', ' ');
+}
+
+function mapToMeta(item, type) {
+  const target = item.movie || item.show;
+  if (!target || !target.ids) return null;
+
+  const imdbId = target.ids.imdb;
+  const id = imdbId || `trakt:${target.ids.trakt}`;
+  const title = target.title || 'Unknown Title';
+  const year = target.year ? String(target.year) : undefined;
+
+  let poster = undefined;
+  if (target.images?.poster?.[0]) {
+    poster = `https://${target.images.poster[0]}`;
+  } else if (imdbId) {
+    poster = `https://images.metahub.space/poster/medium/${imdbId}/img`;
+  }
+
+  let background = undefined;
+  if (target.images?.fanart?.[0]) {
+    background = `https://${target.images.fanart[0]}`;
+  } else if (imdbId) {
+    background = `https://images.metahub.space/background/medium/${imdbId}/img`;
+  }
+
+  let logo = undefined;
+  if (target.images?.logo?.[0]) {
+    logo = `https://${target.images.logo[0]}`;
+  } else if (imdbId) {
+    logo = `https://images.metahub.space/logo/medium/${imdbId}/img`;
+  }
+
+  const imdbRating = target.rating ? (Math.round(target.rating * 10) / 10).toFixed(1) : undefined;
+
+  let genres = undefined;
+  if (Array.isArray(target.genres) && target.genres.length > 0) {
+    genres = target.genres.map(normalizeGenre).filter(Boolean);
+  }
+
+  return {
+    id,
+    type,
+    name: title,
+    poster,
+    background,
+    logo,
+    description: target.overview || '',
+    releaseInfo: year,
+    imdbRating,
+    genres,
+    trailer: target.trailer || undefined
+  };
+}
+
+function mapSimklToMeta(item, type) {
+  const target = item.movie || item.show || item;
+  if (!target) return null;
+
+  const imdbId = target.ids?.imdb;
+  const id = imdbId || (target.ids?.simkl ? `simkl:${target.ids.simkl}` : null);
+  if (!id) return null;
+
+  const title = target.title || 'Unknown Title';
+  const year = target.year ? String(target.year) : undefined;
+  const poster = target.poster
+    ? `https://simkl.in/posters/${target.poster}_m.jpg`
+    : (imdbId ? `https://images.metahub.space/poster/medium/${imdbId}/img` : undefined);
+  const background = imdbId ? `https://images.metahub.space/background/medium/${imdbId}/img` : undefined;
+
+  return {
+    id,
+    type,
+    name: title,
+    poster,
+    background,
+    releaseInfo: year,
+    description: target.overview || ''
+  };
 }
 
 async function syncToTrakt(media, token, clientId) {
@@ -155,35 +334,60 @@ async function syncToSimkl(media, token) {
   });
 }
 
-function mapToMeta(item, type) {
-  const target = item.movie || item.show;
-  if (!target || !target.ids) return null;
-  const imdbId = target.ids.imdb;
-  const id = imdbId || `trakt:${target.ids.trakt}`;
-  return {
-    id,
-    type,
-    name: target.title || 'Unknown Title',
-    poster: imdbId ? `https://images.metahub.space/poster/medium/${imdbId}/img` : undefined,
-    year: target.year ? String(target.year) : undefined,
-    description: target.overview || ''
-  };
-}
+async function handleCatalog(catalogId, type, extraSegment, config, defaultClientId, simklClientId) {
+  let skip = 0;
+  let selectedGenre = null;
 
-async function handleCatalog(catalogId, type, skip, config, defaultClientId) {
+  if (extraSegment) {
+    const skipMatch = extraSegment.match(/skip=(\d+)/);
+    if (skipMatch) skip = parseInt(skipMatch[1], 10);
+
+    const genreMatch = extraSegment.match(/genre=([^&]+)/);
+    if (genreMatch) selectedGenre = decodeURIComponent(genreMatch[1]).toLowerCase();
+  }
+
+  const page = Math.floor(skip / 20) + 1;
+
+  // Handle Simkl Catalogs
+  if (catalogId.startsWith('simkl_')) {
+    if (!config.simklToken) return [];
+    let simklEndpoint = '';
+    if (catalogId === 'simkl_watching_shows') simklEndpoint = '/sync/all-items/shows/watching';
+    else if (catalogId === 'simkl_plantowatch_movies') simklEndpoint = '/sync/all-items/movies/plantowatch';
+    else if (catalogId === 'simkl_plantowatch_shows') simklEndpoint = '/sync/all-items/shows/plantowatch';
+    else if (catalogId === 'simkl_completed_movies') simklEndpoint = '/sync/all-items/movies/completed';
+    if (!simklEndpoint) return [];
+
+    const simklHeaders = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'User-Agent': USER_AGENT,
+      'Authorization': `Bearer ${config.simklToken}`
+    };
+    if (simklClientId) simklHeaders['simkl-api-key'] = simklClientId;
+
+    const res = await fetch(`${SIMKL_API_URL}${simklEndpoint}`, { headers: simklHeaders });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const list = data.movies || data.shows || (Array.isArray(data) ? data : []);
+    const items = list.map(i => mapSimklToMeta(i, type)).filter(Boolean);
+    return items.slice(skip, skip + 20);
+  }
+
+  // Handle Trakt Catalogs
   const token = config.traktToken || config.token;
   const clientId = config.traktClientId || config.clientId || defaultClientId;
   if (!token || !clientId) return [];
 
-  const page = Math.floor(skip / 20) + 1;
   let endpoint = '';
-
   if (catalogId === 'trakt_playback_movies') endpoint = '/sync/playback/movies?extended=full';
   else if (catalogId === 'trakt_playback_series') endpoint = '/sync/playback/episodes?extended=full';
   else if (catalogId === 'trakt_watchlist_movies') endpoint = `/sync/watchlist/movies?extended=full&page=${page}&limit=20`;
   else if (catalogId === 'trakt_watchlist_series') endpoint = `/sync/watchlist/shows?extended=full&page=${page}&limit=20`;
   else if (catalogId === 'trakt_history_movies') endpoint = `/sync/history/movies?extended=full&page=${page}&limit=20`;
   else if (catalogId === 'trakt_history_series') endpoint = `/sync/history/shows?extended=full&page=${page}&limit=20`;
+  else if (catalogId === 'trakt_collection_movies') endpoint = `/sync/collection/movies?extended=full&page=${page}&limit=20`;
+  else if (catalogId === 'trakt_collection_series') endpoint = `/sync/collection/shows?extended=full&page=${page}&limit=20`;
   if (!endpoint) return [];
 
   const res = await fetch(`${TRAKT_API_URL}${endpoint}`, {
@@ -199,9 +403,9 @@ async function handleCatalog(catalogId, type, skip, config, defaultClientId) {
   if (!res.ok) return [];
   const data = await res.json();
 
+  let items = [];
   if (catalogId === 'trakt_playback_series') {
     const seen = new Set();
-    const items = [];
     for (const item of data) {
       if (item.show?.ids?.trakt && !seen.has(item.show.ids.trakt)) {
         seen.add(item.show.ids.trakt);
@@ -209,9 +413,19 @@ async function handleCatalog(catalogId, type, skip, config, defaultClientId) {
         if (meta) items.push(meta);
       }
     }
-    return items;
+  } else {
+    items = data.map(i => mapToMeta(i, type)).filter(Boolean);
   }
-  return data.map(i => mapToMeta(i, type)).filter(Boolean);
+
+  // Filter by genre if requested
+  if (selectedGenre) {
+    items = items.filter(item =>
+      Array.isArray(item.genres) &&
+      item.genres.some(g => g.toLowerCase().includes(selectedGenre))
+    );
+  }
+
+  return items;
 }
 
 export default {
@@ -262,7 +476,7 @@ export default {
     <h1>Trakt Multi-Device Sync</h1>
     <p>Connect Trakt once. Sync playback and catalogs across 5+ Stremio and Nuvio devices without ever getting logged out.</p>
 
-    <!-- Trakt One-Tap Section -->
+    <!-- Trakt Section -->
     <div class="section">
       <div class="section-title">
         <span>1. Trakt Account</span>
@@ -286,13 +500,13 @@ export default {
       </div>
     </div>
 
-    <!-- Simkl Optional Section -->
+    <!-- Simkl Section -->
     <div class="section">
       <div class="section-title">
         <span>2. Simkl (Optional)</span>
         <span id="simklBadge" style="font-size:0.8rem; color:#94a3b8;">Optional</span>
       </div>
-      <p style="font-size:0.85rem; margin:0 0 0.5rem 0;">Cross-syncs playback to Simkl at the same time.</p>
+      <p style="font-size:0.85rem; margin:0 0 0.5rem 0;">Cross-syncs playback and watchlists with Simkl.</p>
       <div id="simklBtnWrap">
         <button id="btnSimkl" class="btn btn-outline" style="border-color:#38bdf8; color:#38bdf8;" onclick="startSimkl()">Tap to Connect Simkl</button>
       </div>
@@ -315,7 +529,7 @@ export default {
       </div>
     </div>
 
-    <!-- Step 3: 1-Click Install -->
+    <!-- Install -->
     <div id="installSection" style="display:none; margin-top:1.5rem;">
       <a id="stremioLink" class="btn btn-green" href="#">🚀 Install in Stremio (1-Click)</a>
       <p style="margin:1.25rem 0 0.25rem 0; font-size:0.85rem; font-weight:600; color:#cbd5e1;">Or copy Manifest URL into Nuvio / Stremio Web:</p>
@@ -324,8 +538,13 @@ export default {
   </div>
 
   <script>
+    const SERVER_TRAKT_CLIENT_ID = "${traktClientId}";
+    const SERVER_SIMKL_CLIENT_ID = "${simklClientId}";
+
     let traktToken = '';
+    let activeTraktClientId = SERVER_TRAKT_CLIENT_ID;
     let simklToken = '';
+    let activeSimklClientId = SERVER_SIMKL_CLIENT_ID;
     let pollInterval = null;
     let simklPollInterval = null;
 
@@ -334,24 +553,58 @@ export default {
       btn.disabled = true;
       btn.innerText = 'Requesting code...';
 
+      const clientId = activeTraktClientId || SERVER_TRAKT_CLIENT_ID;
+      if (!clientId) {
+        alert('TRAKT_CLIENT_ID is not configured in Cloudflare Environment Variables.');
+        btn.disabled = false;
+        btn.innerText = 'Tap to Connect Trakt';
+        return;
+      }
+
       try {
-        const res = await fetch('/api/auth/start', { method: 'POST' });
-        const text = await res.text();
-        let data;
+        let data = null;
+
+        // Method 1: Direct browser fetch to Trakt API (bypasses Cloudflare Worker egress IP rate limits)
         try {
-          data = JSON.parse(text);
-        } catch (_) {
-          throw new Error('Server returned: ' + text.slice(0, 100));
+          const directRes = await fetch('https://api.trakt.tv/oauth/device/code', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'trakt-api-version': '2',
+              'trakt-api-key': clientId
+            },
+            body: JSON.stringify({ client_id: clientId })
+          });
+          if (directRes.ok) {
+            data = await directRes.json();
+          }
+        } catch (e) {
+          console.warn('Direct Trakt connection failed, attempting worker proxy fallback:', e);
         }
 
-        if (!res.ok) throw new Error(data.error || 'Failed to request Trakt code');
+        // Method 2: Worker Proxy fallback
+        if (!data) {
+          const res = await fetch('/api/auth/start', { method: 'POST' });
+          const text = await res.text();
+          try {
+            data = JSON.parse(text);
+          } catch (_) {
+            throw new Error('Server returned non-JSON response: ' + text.slice(0, 150));
+          }
+          if (!res.ok) throw new Error(data.error || 'Failed to request Trakt code');
+        }
+
+        if (!data || !data.user_code) {
+          throw new Error('Failed to acquire Trakt activation code');
+        }
 
         document.getElementById('traktUserCode').innerText = data.user_code;
         document.getElementById('traktActivateLink').href = data.verification_url || 'https://auth.trakt.tv/activate';
         document.getElementById('traktInitial').style.display = 'none';
         document.getElementById('traktCodeBox').style.display = 'block';
 
-        pollTraktToken(data.device_code, data.interval || 6);
+        pollTraktToken(data.device_code, data.interval || 6, clientId);
       } catch (err) {
         alert(err.message);
         btn.disabled = false;
@@ -365,30 +618,78 @@ export default {
       alert('Code ' + code + ' copied to clipboard!');
     }
 
-    function pollTraktToken(deviceCode, interval) {
+    function pollTraktToken(deviceCode, interval, clientId) {
+      if (pollInterval) clearInterval(pollInterval);
       pollInterval = setInterval(async () => {
         try {
-          const res = await fetch('/api/auth/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ deviceCode })
-          });
-          const data = await res.json();
-          if (res.ok && data.access_token) {
+          let tokenData = null;
+
+          // Method 1: Direct browser polling
+          try {
+            const directRes = await fetch('https://api.trakt.tv/oauth/device/token', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'trakt-api-version': '2',
+                'trakt-api-key': clientId
+              },
+              body: JSON.stringify({
+                code: deviceCode,
+                client_id: clientId
+              })
+            });
+            if (directRes.ok) {
+              tokenData = await directRes.json();
+            }
+          } catch (_) {}
+
+          // Method 2: Worker proxy polling fallback
+          if (!tokenData) {
+            const res = await fetch('/api/auth/token', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ deviceCode })
+            });
+            if (res.ok) {
+              const resData = await res.json();
+              if (resData.access_token) tokenData = resData;
+            }
+          }
+
+          if (tokenData && tokenData.access_token) {
             clearInterval(pollInterval);
-            traktToken = data.access_token;
+            traktToken = tokenData.access_token;
+            activeTraktClientId = clientId;
+
+            // Fetch Trakt username directly
+            let username = '';
+            try {
+              const uRes = await fetch('https://api.trakt.tv/users/me', {
+                headers: {
+                  'Content-Type': 'application/json',
+                  'trakt-api-version': '2',
+                  'trakt-api-key': clientId,
+                  'Authorization': 'Bearer ' + traktToken
+                }
+              });
+              if (uRes.ok) {
+                const uData = await uRes.json();
+                username = uData.username || '';
+              }
+            } catch (_) {}
 
             document.getElementById('traktCodeBox').style.display = 'none';
             document.getElementById('traktBadge').innerText = 'Connected';
             document.getElementById('traktBadge').style.color = '#34d399';
-            document.getElementById('traktUser').innerText = data.username ? '@' + data.username : 'Active';
+            document.getElementById('traktUser').innerText = username ? '@' + username : 'Active';
             document.getElementById('traktConnected').style.display = 'block';
             document.getElementById('installSection').style.display = 'block';
 
             updateUrls();
           }
         } catch (_) {}
-      }, interval * 1000);
+      }, (interval || 6) * 1000);
     }
 
     async function startSimkl() {
@@ -396,28 +697,47 @@ export default {
       btn.disabled = true;
       btn.innerText = 'Requesting Simkl PIN...';
 
+      const clientId = activeSimklClientId || SERVER_SIMKL_CLIENT_ID;
+
       try {
-        const res = await fetch('/api/simkl/start', { method: 'POST' });
-        const text = await res.text();
-        let data;
-        try {
-          data = JSON.parse(text);
-        } catch (_) {
-          throw new Error('Server returned: ' + text.slice(0, 100));
+        let data = null;
+
+        // Method 1: Direct browser fetch to Simkl
+        if (clientId) {
+          try {
+            const directRes = await fetch('https://api.simkl.com/oauth/pin?client_id=' + encodeURIComponent(clientId));
+            if (directRes.ok) {
+              data = await directRes.json();
+            }
+          } catch (_) {}
         }
 
-        if (!res.ok) {
-          alert(data.error || 'Set SIMKL_CLIENT_ID in Cloudflare or paste token below');
-          btn.disabled = false;
-          btn.innerText = 'Tap to Connect Simkl';
-          return;
+        // Method 2: Worker proxy fallback
+        if (!data) {
+          const res = await fetch('/api/simkl/start', { method: 'POST' });
+          const text = await res.text();
+          try {
+            data = JSON.parse(text);
+          } catch (_) {
+            throw new Error('Server returned non-JSON response: ' + text.slice(0, 150));
+          }
+          if (!res.ok) {
+            alert(data.error || 'Set SIMKL_CLIENT_ID in Cloudflare or paste token below');
+            btn.disabled = false;
+            btn.innerText = 'Tap to Connect Simkl';
+            return;
+          }
+        }
+
+        if (!data || !data.user_code) {
+          throw new Error('Failed to acquire Simkl PIN');
         }
 
         document.getElementById('simklUserCode').innerText = data.user_code;
         document.getElementById('simklBtnWrap').style.display = 'none';
         document.getElementById('simklCodeBox').style.display = 'block';
 
-        pollSimklToken(data.device_code, data.interval || 5);
+        pollSimklToken(data.user_code || data.device_code, data.interval || 5, clientId);
       } catch (err) {
         alert(err.message);
         btn.disabled = false;
@@ -431,18 +751,41 @@ export default {
       alert('Code ' + code + ' copied to clipboard!');
     }
 
-    function pollSimklToken(deviceCode, interval) {
+    function pollSimklToken(userCodeOrDeviceCode, interval, clientId) {
+      if (simklPollInterval) clearInterval(simklPollInterval);
       simklPollInterval = setInterval(async () => {
         try {
-          const res = await fetch('/api/simkl/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ deviceCode })
-          });
-          const data = await res.json();
-          if (res.ok && data.access_token) {
+          let token = null;
+
+          // Method 1: Direct Simkl polling
+          if (clientId && userCodeOrDeviceCode) {
+            try {
+              const directRes = await fetch('https://api.simkl.com/oauth/pin/check/' + encodeURIComponent(userCodeOrDeviceCode) + '?client_id=' + encodeURIComponent(clientId));
+              if (directRes.ok) {
+                const directData = await directRes.json();
+                if (directData.result === 'OK' && directData.access_token) {
+                  token = directData.access_token;
+                }
+              }
+            } catch (_) {}
+          }
+
+          // Method 2: Worker proxy fallback
+          if (!token) {
+            const res = await fetch('/api/simkl/token', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ deviceCode: userCodeOrDeviceCode })
+            });
+            if (res.ok) {
+              const resData = await res.json();
+              if (resData.access_token) token = resData.access_token;
+            }
+          }
+
+          if (token) {
             clearInterval(simklPollInterval);
-            simklToken = data.access_token;
+            simklToken = token;
             document.getElementById('simklToken').value = simklToken;
             document.getElementById('simklCodeBox').style.display = 'none';
             document.getElementById('simklBadge').innerText = 'Connected';
@@ -451,7 +794,7 @@ export default {
             updateUrls();
           }
         } catch (_) {}
-      }, interval * 1000);
+      }, (interval || 5) * 1000);
     }
 
     function updateUrls() {
@@ -459,13 +802,15 @@ export default {
       const simkl = document.getElementById('simklToken').value.trim();
       const configObj = {
         traktToken: traktToken,
-        simklToken: simkl || undefined
+        traktClientId: activeTraktClientId || SERVER_TRAKT_CLIENT_ID || undefined,
+        simklToken: simkl || undefined,
+        simklClientId: activeSimklClientId || SERVER_SIMKL_CLIENT_ID || undefined
       };
 
-      const enc = btoa(JSON.stringify(configObj)).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
+      const enc = btoa(JSON.stringify(configObj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       const origin = window.location.origin;
       const manifest = origin + '/' + enc + '/manifest.json';
-      const stremio = manifest.replace(/^https?:\\/\\//, 'stremio://');
+      const stremio = manifest.replace(/^https?:\/\//, 'stremio://');
 
       document.getElementById('manifestUrl').innerText = manifest;
       document.getElementById('stremioLink').href = stremio;
@@ -478,9 +823,47 @@ export default {
         });
       }
 
+      // Icon Branding
+      if (pathname === '/icon.svg') {
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="traktRed" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ed1c40"/>
+      <stop offset="100%" stop-color="#be123c"/>
+    </linearGradient>
+    <linearGradient id="cyanAccent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#bg)"/>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="none" stroke="url(#traktRed)" stroke-width="12" opacity="0.4"/>
+  <path d="M 176 140 L 336 140 C 352 140 364 152 364 168 C 364 184 352 196 336 196 L 284 196 L 284 348 C 284 364 272 376 256 376 C 240 376 228 364 228 348 L 228 196 L 176 196 C 160 196 148 184 148 168 C 148 152 160 140 176 140 Z" fill="url(#traktRed)"/>
+  <path d="M 390 220 A 150 150 0 0 0 256 106 L 256 70 L 190 125 L 256 180 L 256 144 A 112 112 0 0 1 354 232 Z" fill="url(#cyanAccent)"/>
+  <path d="M 122 292 A 150 150 0 0 0 256 406 L 256 442 L 322 387 L 256 332 L 256 368 A 112 112 0 0 1 158 280 Z" fill="url(#cyanAccent)"/>
+</svg>`;
+        return new Response(svg, {
+          headers: {
+            'Content-Type': 'image/svg+xml',
+            'Cache-Control': 'public, max-age=604800',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
+      }
+
       // Trakt Device Code: Start
       if (pathname === '/api/auth/start' && request.method === 'POST') {
-        if (!traktClientId) {
+        let reqClientId = traktClientId;
+        try {
+          const body = await request.json();
+          if (body && body.clientId) reqClientId = body.clientId.trim();
+        } catch (_) {}
+
+        if (!reqClientId) {
           return jsonResponse({ error: 'TRAKT_CLIENT_ID environment variable is missing in Cloudflare' }, 400);
         }
         try {
@@ -489,9 +872,11 @@ export default {
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
-              'User-Agent': USER_AGENT
+              'User-Agent': 'StremioTraktSync/2.3.0',
+              'trakt-api-version': '2',
+              'trakt-api-key': reqClientId
             },
-            body: JSON.stringify({ client_id: traktClientId })
+            body: JSON.stringify({ client_id: reqClientId })
           });
           const text = await res.text();
           try {
@@ -507,21 +892,32 @@ export default {
 
       // Trakt Device Code: Poll
       if (pathname === '/api/auth/token' && request.method === 'POST') {
-        if (!traktClientId) {
+        let reqClientId = traktClientId;
+        let deviceCode = '';
+        try {
+          const body = await request.json();
+          if (body) {
+            deviceCode = body.deviceCode;
+            if (body.clientId) reqClientId = body.clientId.trim();
+          }
+        } catch (_) {}
+
+        if (!reqClientId) {
           return jsonResponse({ error: 'TRAKT_CLIENT_ID environment variable is missing' }, 400);
         }
-        const { deviceCode } = await request.json();
         try {
           const res = await fetch(`${TRAKT_API_URL}/oauth/device/token`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
-              'User-Agent': USER_AGENT
+              'User-Agent': 'StremioTraktSync/2.3.0',
+              'trakt-api-version': '2',
+              'trakt-api-key': reqClientId
             },
             body: JSON.stringify({
               code: deviceCode,
-              client_id: traktClientId
+              client_id: reqClientId
             })
           });
 
@@ -536,9 +932,9 @@ export default {
               headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                'User-Agent': USER_AGENT,
+                'User-Agent': 'StremioTraktSync/2.3.0',
                 'trakt-api-version': '2',
-                'trakt-api-key': traktClientId,
+                'trakt-api-key': reqClientId,
                 'Authorization': `Bearer ${tokenData.access_token}`
               }
             });
@@ -550,6 +946,7 @@ export default {
 
           return jsonResponse({
             access_token: tokenData.access_token,
+            refresh_token: tokenData.refresh_token,
             username
           });
         } catch (err) {
@@ -628,7 +1025,7 @@ export default {
 
       // Manifest
       if (routeParts.length === 1 && routeParts[0] === 'manifest.json') {
-        return jsonResponse(MANIFEST);
+        return jsonResponse(buildManifest(config));
       }
 
       // Subtitles Hook (Dynamic Scrobbler on Playback Start)
@@ -663,14 +1060,8 @@ export default {
         const catalogId = idWithExt.replace(/\.json$/, '');
         const extraSegment = routeParts[3] ? routeParts[3].replace(/\.json$/, '') : '';
 
-        let skip = 0;
-        if (extraSegment && extraSegment.includes('skip=')) {
-          const match = extraSegment.match(/skip=(\d+)/);
-          if (match) skip = parseInt(match[1], 10);
-        }
-
         if (!config) return jsonResponse({ metas: [] });
-        const metas = await handleCatalog(catalogId, type, skip, config, traktClientId);
+        const metas = await handleCatalog(catalogId, type, extraSegment, config, traktClientId, simklClientId);
         return jsonResponse({ metas });
       }
 
