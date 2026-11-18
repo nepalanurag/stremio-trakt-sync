@@ -194,7 +194,7 @@ function parseConfig(segment) {
   try {
     const raw = atob(segment.replace(/-/g, '+').replace(/_/g, '/'));
     const parsed = JSON.parse(raw);
-    if (parsed.traktToken || parsed.token) return parsed;
+    if (parsed.traktToken || parsed.token || parsed.simklToken || parsed.pass) return parsed;
   } catch (_) {}
   return null;
 }
