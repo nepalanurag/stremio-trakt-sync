@@ -1,14 +1,17 @@
 // Cloudflare Worker: Syncribullet Trakt & Multi-Tracker Addon
-// Runs 100% serverless on Cloudflare's free tier (no local servers needed).
+// 100% Serverless, Tap-and-Setup flow with zero secrets required.
 
+const DEFAULT_TRAKT_CLIENT_ID = '';
 const TRAKT_API_URL = 'https://api.trakt.tv';
 const SIMKL_API_URL = 'https://api.simkl.com';
 
+const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
 const MANIFEST = {
   id: 'org.syncribullet.cfworker',
-  version: '2.0.0',
-  name: 'Syncribullet Trakt Sync',
-  description: 'Serverless Trakt & Simkl playback scrobbler and catalog sync across unlimited devices.',
+  version: '2.2.0',
+  name: 'Trakt & Simkl Multi-Device Sync',
+  description: 'Tap-and-setup Trakt scrobbler and catalog sync across unlimited Stremio & Nuvio devices.',
   resources: ['catalog', 'subtitles'],
   types: ['movie', 'series'],
   catalogs: [
@@ -91,7 +94,7 @@ function parseMediaId(type, idWithExt) {
 }
 
 async function syncToTrakt(media, token, clientId) {
-  if (!media.imdbId.startsWith('tt')) return;
+  if (!media.imdbId || !media.imdbId.startsWith('tt')) return;
   let payload = null;
   if (media.type === 'movie') {
     payload = { movies: [{ ids: { imdb: media.imdbId } }] };
@@ -112,6 +115,8 @@ async function syncToTrakt(media, token, clientId) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'User-Agent': USER_AGENT,
       'trakt-api-version': '2',
       'trakt-api-key': clientId,
       'Authorization': `Bearer ${token}`
@@ -121,7 +126,7 @@ async function syncToTrakt(media, token, clientId) {
 }
 
 async function syncToSimkl(media, token) {
-  if (!media.imdbId.startsWith('tt')) return;
+  if (!media.imdbId || !media.imdbId.startsWith('tt')) return;
   let payload = null;
   if (media.type === 'movie') {
     payload = { movies: [{ ids: { imdb: media.imdbId } }] };
@@ -142,6 +147,8 @@ async function syncToSimkl(media, token) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'User-Agent': USER_AGENT,
       'Authorization': `Bearer ${token}`
     },
     body: JSON.stringify(payload)
@@ -163,9 +170,9 @@ function mapToMeta(item, type) {
   };
 }
 
-async function handleCatalog(catalogId, type, skip, config) {
+async function handleCatalog(catalogId, type, skip, config, defaultClientId) {
   const token = config.traktToken || config.token;
-  const clientId = config.traktClientId || config.clientId;
+  const clientId = config.traktClientId || config.clientId || defaultClientId;
   if (!token || !clientId) return [];
 
   const page = Math.floor(skip / 20) + 1;
@@ -182,6 +189,8 @@ async function handleCatalog(catalogId, type, skip, config) {
   const res = await fetch(`${TRAKT_API_URL}${endpoint}`, {
     headers: {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'User-Agent': USER_AGENT,
       'trakt-api-version': '2',
       'trakt-api-key': clientId,
       'Authorization': `Bearer ${token}`
@@ -211,215 +220,466 @@ export default {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
-    const url = new URL(request.url);
-    const pathname = url.pathname;
+    try {
+      const traktClientId = (env?.TRAKT_CLIENT_ID || DEFAULT_TRAKT_CLIENT_ID || '').trim();
+      const simklClientId = (env?.SIMKL_CLIENT_ID || '').trim();
 
-    // Web Dashboard / Setup UI
-    if (pathname === '/' || pathname === '/configure') {
-      const html = `<!DOCTYPE html>
+      const url = new URL(request.url);
+      const pathname = url.pathname;
+
+      // Web Dashboard
+      if (pathname === '/' || pathname === '/configure') {
+        const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Syncribullet Cloudflare Serverless</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stremio Trakt Multi-Device Sync</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b0f19; color: #f1f5f9; margin: 0; padding: 2rem; display: flex; justify-content: center; }
-    .card { background: #161e2e; border-radius: 14px; padding: 2rem; max-width: 600px; width: 100%; box-shadow: 0 10px 30px rgba(0,0,0,0.6); border: 1px solid #1e293b; }
-    h1 { font-size: 1.4rem; color: #38bdf8; margin-top: 0; }
-    p { color: #94a3b8; font-size: 0.9rem; line-height: 1.5; }
-    label { display: block; margin-top: 1.25rem; font-weight: 600; font-size: 0.85rem; color: #cbd5e1; }
-    input { width: 100%; padding: 0.75rem; margin-top: 0.25rem; border: 1px solid #334155; border-radius: 6px; background: #0b0f19; color: #fff; box-sizing: border-box; }
-    button { background: #0284c7; color: white; border: none; border-radius: 6px; padding: 0.75rem; font-weight: 600; margin-top: 1.25rem; cursor: pointer; width: 100%; }
-    .code-box { background: #0b0f19; border: 1px dashed #38bdf8; border-radius: 8px; padding: 1.25rem; margin-top: 1rem; text-align: center; }
-    .user-code { font-size: 2rem; font-weight: bold; letter-spacing: 5px; color: #38bdf8; margin: 0.5rem 0; }
-    .btn-install { background: #10b981; margin-top: 1rem; text-decoration: none; display: block; text-align: center; color: white; padding: 0.85rem; border-radius: 6px; font-weight: 600; }
-    .url-display { background: #0b0f19; word-break: break-all; padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.8rem; color: #a5f3fc; margin-top: 0.5rem; border: 1px solid #1e293b; }
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b0f19; color: #f1f5f9; margin: 0; padding: 1.5rem; display: flex; justify-content: center; }
+    .card { background: #161e2e; border-radius: 16px; padding: 2rem; max-width: 580px; width: 100%; box-shadow: 0 10px 35px rgba(0,0,0,0.6); border: 1px solid #1e293b; }
+    h1 { font-size: 1.5rem; color: #38bdf8; margin: 0 0 0.5rem 0; }
+    p { color: #94a3b8; font-size: 0.95rem; line-height: 1.5; margin: 0 0 1.5rem 0; }
+    .section { background: #0f172a; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem; border: 1px solid #1e293b; }
+    .section-title { font-size: 0.95rem; font-weight: 700; color: #e2e8f0; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between; }
+    .btn { background: #0284c7; color: white; border: none; border-radius: 8px; padding: 0.85rem 1.25rem; font-weight: 600; font-size: 1rem; cursor: pointer; width: 100%; transition: background 0.15s ease-in-out; text-align: center; text-decoration: none; display: block; }
+    .btn:hover { background: #0369a1; }
+    .btn-green { background: #10b981; }
+    .btn-green:hover { background: #059669; }
+    .btn-outline { background: transparent; border: 1px solid #38bdf8; color: #38bdf8; font-size: 0.9rem; padding: 0.6rem; margin-top: 0.5rem; }
+    .btn-outline:hover { background: rgba(56,189,248,0.1); }
+    .code-box { background: #020617; border: 1px dashed #38bdf8; border-radius: 8px; padding: 1.25rem; margin-top: 1rem; text-align: center; }
+    .user-code { font-size: 2.2rem; font-weight: 800; letter-spacing: 6px; color: #38bdf8; margin: 0.5rem 0; font-family: monospace; }
+    .status-text { font-size: 0.85rem; color: #94a3b8; margin: 0.5rem 0 0 0; }
+    .badge-success { background: rgba(16,185,129,0.15); border: 1px solid #10b981; color: #34d399; padding: 0.75rem; border-radius: 8px; font-weight: 600; text-align: center; margin-top: 1rem; }
+    .url-display { background: #020617; word-break: break-all; padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.8rem; color: #a5f3fc; margin-top: 0.5rem; border: 1px solid #1e293b; user-select: all; }
+    input { width: 100%; padding: 0.75rem; border: 1px solid #334155; border-radius: 6px; background: #020617; color: #fff; box-sizing: border-box; font-size: 0.9rem; margin-top: 0.4rem; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>Serverless Trakt Multi-Device Sync</h1>
-    <p>Zero local servers required. Operates directly on Cloudflare Workers to sync playback and catalogs across 5+ Stremio and Nuvio devices.</p>
+    <h1>Trakt Multi-Device Sync</h1>
+    <p>Connect Trakt once. Sync playback and catalogs across 5+ Stremio and Nuvio devices without ever getting logged out.</p>
 
-    <label for="clientId">Trakt Client ID (from trakt.tv/oauth/applications):</label>
-    <input id="clientId" placeholder="Paste Client ID">
+    <!-- Trakt One-Tap Section -->
+    <div class="section">
+      <div class="section-title">
+        <span>1. Trakt Account</span>
+        <span id="traktBadge" style="font-size:0.8rem; color:#94a3b8;">Not Connected</span>
+      </div>
 
-    <label for="clientSecret">Trakt Client Secret:</label>
-    <input id="clientSecret" type="password" placeholder="Paste Client Secret">
+      <div id="traktInitial">
+        <button id="btnTrakt" class="btn" onclick="startTrakt()">Tap to Connect Trakt</button>
+      </div>
 
-    <label for="simklToken">Simkl Access Token (Optional):</label>
-    <input id="simklToken" placeholder="Leave blank if not using Simkl">
+      <div id="traktCodeBox" class="code-box" style="display:none;">
+        <p style="margin:0 0 0.25rem 0; font-size:0.85rem; color:#cbd5e1;">Your activation code:</p>
+        <div id="traktUserCode" class="user-code">----</div>
+        <a id="traktActivateLink" class="btn btn-outline" href="https://auth.trakt.tv/activate" target="_blank">1. Open Trakt Activate in New Tab</a>
+        <button class="btn btn-outline" style="border-color:#64748b; color:#cbd5e1; margin-top:0.4rem;" onclick="copyCode()">2. Copy Code to Clipboard</button>
+        <p id="traktPollStatus" class="status-text">Waiting for you to tap Yes on Trakt...</p>
+      </div>
 
-    <button id="btnStart" onclick="startAuth()">Connect Trakt Account</button>
-
-    <div id="stepCode" class="code-box" style="display:none;">
-      <p style="margin:0;">Open <a id="verifyUrl" href="https://trakt.tv/activate" target="_blank" style="color:#38bdf8; font-weight:bold;">trakt.tv/activate</a> and enter:</p>
-      <div id="userCode" class="user-code">----</div>
-      <p style="font-size:0.8rem; margin:0; color:#94a3b8;">Waiting for authorization...</p>
+      <div id="traktConnected" class="badge-success" style="display:none;">
+        Connected to Trakt: <span id="traktUser" style="color:#fff;"></span>
+      </div>
     </div>
 
-    <div id="stepInstall" style="display:none; margin-top:1.5rem;">
-      <a id="stremioLink" class="btn-install" href="#">Install in Stremio</a>
-      <p style="margin-top:1rem; margin-bottom:0.25rem;">Manifest URL (for Nuvio or Stremio Web):</p>
+    <!-- Simkl Optional Section -->
+    <div class="section">
+      <div class="section-title">
+        <span>2. Simkl (Optional)</span>
+        <span id="simklBadge" style="font-size:0.8rem; color:#94a3b8;">Optional</span>
+      </div>
+      <p style="font-size:0.85rem; margin:0 0 0.5rem 0;">Cross-syncs playback to Simkl at the same time.</p>
+      <div id="simklBtnWrap">
+        <button id="btnSimkl" class="btn btn-outline" style="border-color:#38bdf8; color:#38bdf8;" onclick="startSimkl()">Tap to Connect Simkl</button>
+      </div>
+
+      <div id="simklCodeBox" class="code-box" style="display:none;">
+        <p style="margin:0 0 0.25rem 0; font-size:0.85rem; color:#cbd5e1;">Your Simkl PIN code:</p>
+        <div id="simklUserCode" class="user-code">----</div>
+        <a id="simklActivateLink" class="btn btn-outline" href="https://simkl.com/pin" target="_blank">1. Open simkl.com/pin in New Tab</a>
+        <button class="btn btn-outline" style="border-color:#64748b; color:#cbd5e1; margin-top:0.4rem;" onclick="copySimklCode()">2. Copy Code to Clipboard</button>
+        <p id="simklPollStatus" class="status-text">Waiting for authorization on Simkl...</p>
+      </div>
+
+      <div id="simklConnected" class="badge-success" style="display:none;">
+        Connected to Simkl
+      </div>
+
+      <div style="margin-top:0.75rem;">
+        <p style="font-size:0.75rem; color:#64748b; margin:0;">Or paste token directly:</p>
+        <input id="simklToken" placeholder="Paste existing Simkl Token" oninput="updateUrls()">
+      </div>
+    </div>
+
+    <!-- Step 3: 1-Click Install -->
+    <div id="installSection" style="display:none; margin-top:1.5rem;">
+      <a id="stremioLink" class="btn btn-green" href="#">🚀 Install in Stremio (1-Click)</a>
+      <p style="margin:1.25rem 0 0.25rem 0; font-size:0.85rem; font-weight:600; color:#cbd5e1;">Or copy Manifest URL into Nuvio / Stremio Web:</p>
       <div id="manifestUrl" class="url-display"></div>
     </div>
   </div>
 
   <script>
+    let traktToken = '';
+    let simklToken = '';
     let pollInterval = null;
-    async function startAuth() {
-      const clientId = document.getElementById('clientId').value.trim();
-      const clientSecret = document.getElementById('clientSecret').value.trim();
-      if (!clientId || !clientSecret) return alert('Enter both Trakt Client ID and Client Secret');
+    let simklPollInterval = null;
 
-      document.getElementById('btnStart').disabled = true;
-      document.getElementById('btnStart').innerText = 'Requesting code...';
+    async function startTrakt() {
+      const btn = document.getElementById('btnTrakt');
+      btn.disabled = true;
+      btn.innerText = 'Requesting code...';
 
-      const res = await fetch('/api/auth/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId, clientSecret })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        document.getElementById('btnStart').disabled = false;
-        return alert(data.error || 'Failed to start auth');
+      try {
+        const res = await fetch('/api/auth/start', { method: 'POST' });
+        const text = await res.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch (_) {
+          throw new Error('Server returned: ' + text.slice(0, 100));
+        }
+
+        if (!res.ok) throw new Error(data.error || 'Failed to request Trakt code');
+
+        document.getElementById('traktUserCode').innerText = data.user_code;
+        document.getElementById('traktActivateLink').href = data.verification_url || 'https://auth.trakt.tv/activate';
+        document.getElementById('traktInitial').style.display = 'none';
+        document.getElementById('traktCodeBox').style.display = 'block';
+
+        pollTraktToken(data.device_code, data.interval || 6);
+      } catch (err) {
+        alert(err.message);
+        btn.disabled = false;
+        btn.innerText = 'Tap to Connect Trakt';
       }
-
-      document.getElementById('userCode').innerText = data.user_code;
-      document.getElementById('verifyUrl').href = data.verification_url;
-      document.getElementById('stepCode').style.display = 'block';
-      document.getElementById('btnStart').style.display = 'none';
-
-      pollToken(data.device_code, clientId, clientSecret, data.interval || 5);
     }
 
-    function pollToken(deviceCode, clientId, clientSecret, interval) {
+    function copyCode() {
+      const code = document.getElementById('traktUserCode').innerText;
+      navigator.clipboard.writeText(code);
+      alert('Code ' + code + ' copied to clipboard!');
+    }
+
+    function pollTraktToken(deviceCode, interval) {
       pollInterval = setInterval(async () => {
         try {
           const res = await fetch('/api/auth/token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ deviceCode, clientId, clientSecret })
+            body: JSON.stringify({ deviceCode })
           });
           const data = await res.json();
           if (res.ok && data.access_token) {
             clearInterval(pollInterval);
-            document.getElementById('stepCode').style.display = 'none';
-            document.getElementById('stepInstall').style.display = 'block';
+            traktToken = data.access_token;
 
-            const simklToken = document.getElementById('simklToken').value.trim();
-            const configObj = {
-              traktToken: data.access_token,
-              traktClientId: clientId,
-              simklToken: simklToken || undefined
-            };
+            document.getElementById('traktCodeBox').style.display = 'none';
+            document.getElementById('traktBadge').innerText = 'Connected';
+            document.getElementById('traktBadge').style.color = '#34d399';
+            document.getElementById('traktUser').innerText = data.username ? '@' + data.username : 'Active';
+            document.getElementById('traktConnected').style.display = 'block';
+            document.getElementById('installSection').style.display = 'block';
 
-            const enc = btoa(JSON.stringify(configObj)).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
-            const origin = window.location.origin;
-            const manifest = origin + '/' + enc + '/manifest.json';
-            const stremio = manifest.replace(/^https?:\\/\\//, 'stremio://');
-
-            document.getElementById('manifestUrl').innerText = manifest;
-            document.getElementById('stremioLink').href = stremio;
+            updateUrls();
           }
         } catch (_) {}
       }, interval * 1000);
     }
+
+    async function startSimkl() {
+      const btn = document.getElementById('btnSimkl');
+      btn.disabled = true;
+      btn.innerText = 'Requesting Simkl PIN...';
+
+      try {
+        const res = await fetch('/api/simkl/start', { method: 'POST' });
+        const text = await res.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch (_) {
+          throw new Error('Server returned: ' + text.slice(0, 100));
+        }
+
+        if (!res.ok) {
+          alert(data.error || 'Set SIMKL_CLIENT_ID in Cloudflare or paste token below');
+          btn.disabled = false;
+          btn.innerText = 'Tap to Connect Simkl';
+          return;
+        }
+
+        document.getElementById('simklUserCode').innerText = data.user_code;
+        document.getElementById('simklBtnWrap').style.display = 'none';
+        document.getElementById('simklCodeBox').style.display = 'block';
+
+        pollSimklToken(data.device_code, data.interval || 5);
+      } catch (err) {
+        alert(err.message);
+        btn.disabled = false;
+        btn.innerText = 'Tap to Connect Simkl';
+      }
+    }
+
+    function copySimklCode() {
+      const code = document.getElementById('simklUserCode').innerText;
+      navigator.clipboard.writeText(code);
+      alert('Code ' + code + ' copied to clipboard!');
+    }
+
+    function pollSimklToken(deviceCode, interval) {
+      simklPollInterval = setInterval(async () => {
+        try {
+          const res = await fetch('/api/simkl/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deviceCode })
+          });
+          const data = await res.json();
+          if (res.ok && data.access_token) {
+            clearInterval(simklPollInterval);
+            simklToken = data.access_token;
+            document.getElementById('simklToken').value = simklToken;
+            document.getElementById('simklCodeBox').style.display = 'none';
+            document.getElementById('simklBadge').innerText = 'Connected';
+            document.getElementById('simklBadge').style.color = '#34d399';
+            document.getElementById('simklConnected').style.display = 'block';
+            updateUrls();
+          }
+        } catch (_) {}
+      }, interval * 1000);
+    }
+
+    function updateUrls() {
+      if (!traktToken) return;
+      const simkl = document.getElementById('simklToken').value.trim();
+      const configObj = {
+        traktToken: traktToken,
+        simklToken: simkl || undefined
+      };
+
+      const enc = btoa(JSON.stringify(configObj)).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
+      const origin = window.location.origin;
+      const manifest = origin + '/' + enc + '/manifest.json';
+      const stremio = manifest.replace(/^https?:\\/\\//, 'stremio://');
+
+      document.getElementById('manifestUrl').innerText = manifest;
+      document.getElementById('stremioLink').href = stremio;
+    }
   </script>
 </body>
 </html>`;
-      return new Response(html, {
-        headers: { 'Content-Type': 'text/html; charset=utf-8' }
-      });
-    }
+        return new Response(html, {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        });
+      }
 
-    // Trakt Device Code APIs
-    if (pathname === '/api/auth/start' && request.method === 'POST') {
-      const { clientId } = await request.json();
-      const res = await fetch(`${TRAKT_API_URL}/oauth/device/code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: clientId })
-      });
-      return jsonResponse(await res.json(), res.status);
-    }
-
-    if (pathname === '/api/auth/token' && request.method === 'POST') {
-      const { deviceCode, clientId, clientSecret } = await request.json();
-      const res = await fetch(`${TRAKT_API_URL}/oauth/device/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: deviceCode,
-          client_id: clientId,
-          client_secret: clientSecret
-        })
-      });
-      return jsonResponse(await res.json(), res.status);
-    }
-
-    // Route Parsing
-    const parts = pathname.replace(/^\/+|\/+$/g, '').split('/');
-    let config = null;
-    let offset = 0;
-
-    const potentialConfig = parseConfig(parts[0]);
-    if (potentialConfig) {
-      config = potentialConfig;
-      offset = 1;
-    }
-
-    const routeParts = parts.slice(offset);
-
-    // Manifest
-    if (routeParts.length === 1 && routeParts[0] === 'manifest.json') {
-      return jsonResponse(MANIFEST);
-    }
-
-    // Subtitles Hook (Asynchronous Dynamic Scrobble via ctx.waitUntil)
-    if (routeParts[0] === 'subtitles' && routeParts.length >= 3) {
-      const type = routeParts[1];
-      const idWithExt = routeParts[2];
-      const media = parseMediaId(type, idWithExt);
-
-      if (config && media.imdbId) {
-        const traktToken = config.traktToken || config.token;
-        const traktClientId = config.traktClientId || config.clientId;
-
-        // ctx.waitUntil keeps the Worker alive in the background while instantly returning subtitles response
-        if (ctx && ctx.waitUntil) {
-          ctx.waitUntil((async () => {
-            if (traktToken && traktClientId) {
-              await syncToTrakt(media, traktToken, traktClientId).catch(() => {});
-            }
-            if (config.simklToken) {
-              await syncToSimkl(media, config.simklToken).catch(() => {});
-            }
-          })());
+      // Trakt Device Code: Start
+      if (pathname === '/api/auth/start' && request.method === 'POST') {
+        if (!traktClientId) {
+          return jsonResponse({ error: 'TRAKT_CLIENT_ID environment variable is missing in Cloudflare' }, 400);
+        }
+        try {
+          const res = await fetch(`${TRAKT_API_URL}/oauth/device/code`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'User-Agent': USER_AGENT
+            },
+            body: JSON.stringify({ client_id: traktClientId })
+          });
+          const text = await res.text();
+          try {
+            const data = JSON.parse(text);
+            return jsonResponse(data, res.status);
+          } catch (_) {
+            return jsonResponse({ error: `Trakt returned non-JSON (${res.status}): ${text.slice(0, 150)}` }, 502);
+          }
+        } catch (err) {
+          return jsonResponse({ error: `Failed to contact Trakt: ${err.message}` }, 500);
         }
       }
 
-      return jsonResponse({ subtitles: [] });
-    }
+      // Trakt Device Code: Poll
+      if (pathname === '/api/auth/token' && request.method === 'POST') {
+        if (!traktClientId) {
+          return jsonResponse({ error: 'TRAKT_CLIENT_ID environment variable is missing' }, 400);
+        }
+        const { deviceCode } = await request.json();
+        try {
+          const res = await fetch(`${TRAKT_API_URL}/oauth/device/token`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'User-Agent': USER_AGENT
+            },
+            body: JSON.stringify({
+              code: deviceCode,
+              client_id: traktClientId
+            })
+          });
 
-    // Catalogs
-    if (routeParts[0] === 'catalog' && routeParts.length >= 3) {
-      const type = routeParts[1];
-      const idWithExt = routeParts[2];
-      const catalogId = idWithExt.replace(/\.json$/, '');
-      const extraSegment = routeParts[3] ? routeParts[3].replace(/\.json$/, '') : '';
+          if (!res.ok) {
+            return jsonResponse({ status: 'pending' }, res.status);
+          }
 
-      let skip = 0;
-      if (extraSegment && extraSegment.includes('skip=')) {
-        const match = extraSegment.match(/skip=(\d+)/);
-        if (match) skip = parseInt(match[1], 10);
+          const tokenData = await res.json();
+          let username = '';
+          try {
+            const userRes = await fetch(`${TRAKT_API_URL}/users/me`, {
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'User-Agent': USER_AGENT,
+                'trakt-api-version': '2',
+                'trakt-api-key': traktClientId,
+                'Authorization': `Bearer ${tokenData.access_token}`
+              }
+            });
+            if (userRes.ok) {
+              const userData = await userRes.json();
+              username = userData.username || '';
+            }
+          } catch (_) {}
+
+          return jsonResponse({
+            access_token: tokenData.access_token,
+            username
+          });
+        } catch (err) {
+          return jsonResponse({ error: err.message }, 500);
+        }
       }
 
-      if (!config) return jsonResponse({ metas: [] });
-      const metas = await handleCatalog(catalogId, type, skip, config);
-      return jsonResponse({ metas });
-    }
+      // Simkl Device Code Flow
+      if (pathname === '/api/simkl/start' && request.method === 'POST') {
+        if (!simklClientId) {
+          return jsonResponse({ error: 'SIMKL_CLIENT_ID not configured in Cloudflare environment variables' }, 400);
+        }
+        try {
+          const res = await fetch(`${SIMKL_API_URL}/oauth2/device`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'User-Agent': USER_AGENT
+            },
+            body: JSON.stringify({ client_id: simklClientId })
+          });
+          const text = await res.text();
+          try {
+            const data = JSON.parse(text);
+            return jsonResponse(data, res.status);
+          } catch (_) {
+            return jsonResponse({ error: `Simkl returned non-JSON (${res.status}): ${text.slice(0, 150)}` }, 502);
+          }
+        } catch (err) {
+          return jsonResponse({ error: `Failed to contact Simkl: ${err.message}` }, 500);
+        }
+      }
 
-    return jsonResponse({ error: 'Not found' }, 404);
+      if (pathname === '/api/simkl/token' && request.method === 'POST') {
+        if (!simklClientId) {
+          return jsonResponse({ error: 'SIMKL_CLIENT_ID not configured' }, 400);
+        }
+        const { deviceCode } = await request.json();
+        try {
+          const res = await fetch(`${SIMKL_API_URL}/oauth2/token`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'User-Agent': USER_AGENT
+            },
+            body: JSON.stringify({
+              client_id: simklClientId,
+              code: deviceCode,
+              grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
+            })
+          });
+          if (!res.ok) {
+            return jsonResponse({ status: 'pending' }, res.status);
+          }
+          const text = await res.text();
+          return jsonResponse(JSON.parse(text), 200);
+        } catch (err) {
+          return jsonResponse({ error: err.message }, 500);
+        }
+      }
+
+      // Route Parsing
+      const parts = pathname.replace(/^\/+|\/+$/g, '').split('/');
+      let config = null;
+      let offset = 0;
+
+      const potentialConfig = parseConfig(parts[0]);
+      if (potentialConfig) {
+        config = potentialConfig;
+        offset = 1;
+      }
+
+      const routeParts = parts.slice(offset);
+
+      // Manifest
+      if (routeParts.length === 1 && routeParts[0] === 'manifest.json') {
+        return jsonResponse(MANIFEST);
+      }
+
+      // Subtitles Hook (Dynamic Scrobbler on Playback Start)
+      if (routeParts[0] === 'subtitles' && routeParts.length >= 3) {
+        const type = routeParts[1];
+        const idWithExt = routeParts[2];
+        const media = parseMediaId(type, idWithExt);
+
+        if (config && media.imdbId) {
+          const token = config.traktToken || config.token;
+          const clientId = config.traktClientId || config.clientId || traktClientId;
+
+          if (ctx && ctx.waitUntil) {
+            ctx.waitUntil((async () => {
+              if (token && clientId) {
+                await syncToTrakt(media, token, clientId).catch(() => {});
+              }
+              if (config.simklToken) {
+                await syncToSimkl(media, config.simklToken).catch(() => {});
+              }
+            })());
+          }
+        }
+
+        return jsonResponse({ subtitles: [] });
+      }
+
+      // Catalogs
+      if (routeParts[0] === 'catalog' && routeParts.length >= 3) {
+        const type = routeParts[1];
+        const idWithExt = routeParts[2];
+        const catalogId = idWithExt.replace(/\.json$/, '');
+        const extraSegment = routeParts[3] ? routeParts[3].replace(/\.json$/, '') : '';
+
+        let skip = 0;
+        if (extraSegment && extraSegment.includes('skip=')) {
+          const match = extraSegment.match(/skip=(\d+)/);
+          if (match) skip = parseInt(match[1], 10);
+        }
+
+        if (!config) return jsonResponse({ metas: [] });
+        const metas = await handleCatalog(catalogId, type, skip, config, traktClientId);
+        return jsonResponse({ metas });
+      }
+
+      return jsonResponse({ error: 'Not found' }, 404);
+    } catch (fatalError) {
+      return jsonResponse({
+        error: fatalError.message,
+        stack: fatalError.stack
+      }, 500);
+    }
   }
 };

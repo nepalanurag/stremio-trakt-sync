@@ -7,11 +7,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 7070;
+const DEFAULT_TRAKT_CLIENT_ID = '';
+const TRAKT_CLIENT_ID = process.env.TRAKT_CLIENT_ID || DEFAULT_TRAKT_CLIENT_ID;
 const TRAKT_API_URL = 'https://api.trakt.tv';
 const SIMKL_API_URL = 'https://api.simkl.com';
 const CONFIG_FILE = path.join(__dirname, 'config.json');
 
-// In-memory or file-backed configuration fallback
 let savedConfig = {};
 try {
   if (fs.existsSync(CONFIG_FILE)) {
@@ -21,14 +22,11 @@ try {
   console.error('Could not load config.json:', e.message);
 }
 
-// In-memory debounce cache to avoid duplicate sync calls during player seeks
 const syncDebounceCache = new Map();
 function shouldSync(key) {
   const now = Date.now();
   const last = syncDebounceCache.get(key) || 0;
-  if (now - last < 15 * 60 * 1000) { // 15-minute debounce per media item
-    return false;
-  }
+  if (now - last < 15 * 60 * 1000) return false;
   syncDebounceCache.set(key, now);
   if (syncDebounceCache.size > 2000) {
     for (const [k, v] of syncDebounceCache.entries()) {
@@ -40,9 +38,9 @@ function shouldSync(key) {
 
 const MANIFEST_TEMPLATE = {
   id: 'org.syncribullet.multisync',
-  version: '2.0.0',
-  name: 'Syncribullet Trakt & Multi-Tracker',
-  description: 'Syncribullet-style sync across unlimited devices: automatically scrobbles playback to Trakt & Simkl via the subtitle hook, and syncs catalogs.',
+  version: '2.1.0',
+  name: 'Trakt & Simkl Multi-Device Sync',
+  description: 'Tap-and-setup Trakt scrobbler and catalog sync across unlimited Stremio & Nuvio devices.',
   resources: ['catalog', 'subtitles'],
   types: ['movie', 'series'],
   catalogs: [
@@ -120,9 +118,7 @@ function parseConfigFromSegment(segment) {
 
 function parseMediaId(type, idWithExt) {
   const rawId = idWithExt.replace(/\.json$/, '');
-  if (type === 'movie') {
-    return { type: 'movie', imdbId: rawId };
-  }
+  if (type === 'movie') return { type: 'movie', imdbId: rawId };
   const parts = rawId.split(':');
   if (parts.length >= 3) {
     return {
@@ -147,7 +143,6 @@ async function fetchTrakt(endpoint, token, clientId, method = 'GET', body = null
     }
   };
   if (body) options.body = JSON.stringify(body);
-
   const response = await fetch(url, options);
   if (!response.ok) {
     const errText = await response.text();
@@ -156,18 +151,16 @@ async function fetchTrakt(endpoint, token, clientId, method = 'GET', body = null
   return response.json();
 }
 
-async function fetchSimkl(endpoint, token, clientId, method = 'GET', body = null) {
+async function fetchSimkl(endpoint, token, method = 'GET', body = null) {
   const url = `${SIMKL_API_URL}${endpoint}`;
   const options = {
     method,
     headers: {
       'Content-Type': 'application/json',
-      'simkl-api-key': clientId,
       'Authorization': `Bearer ${token}`
     }
   };
   if (body) options.body = JSON.stringify(body);
-
   const response = await fetch(url, options);
   if (!response.ok) {
     const errText = await response.text();
@@ -176,21 +169,16 @@ async function fetchSimkl(endpoint, token, clientId, method = 'GET', body = null
   return response.json();
 }
 
-// Syncribullet Subtitle Scrobble Hook: Dynamic sync to Trakt & Simkl on playback
 async function performDynamicWatchSync(media, config) {
   const traktToken = config.traktToken || config.token;
-  const traktClientId = config.traktClientId || config.clientId;
+  const traktClientId = config.traktClientId || config.clientId || TRAKT_CLIENT_ID;
   const simklToken = config.simklToken;
-  const simklClientId = config.simklClientId;
 
-  // 1. Sync to Trakt
   if (traktToken && traktClientId && media.imdbId.startsWith('tt')) {
     try {
       let traktPayload = {};
       if (media.type === 'movie') {
-        traktPayload = {
-          movies: [{ ids: { imdb: media.imdbId } }]
-        };
+        traktPayload = { movies: [{ ids: { imdb: media.imdbId } }] };
       } else if (media.season !== undefined && media.episode !== undefined) {
         traktPayload = {
           shows: [{
@@ -204,21 +192,18 @@ async function performDynamicWatchSync(media, config) {
       }
       if (Object.keys(traktPayload).length > 0) {
         await fetchTrakt('/sync/history', traktToken, traktClientId, 'POST', traktPayload);
-        console.log(`[Dynamic Sync] Recorded watch on Trakt: ${media.imdbId} (${media.type === 'series' ? `S${media.season}E${media.episode}` : 'movie'})`);
+        console.log(`[Dynamic Sync] Marked ${media.imdbId} on Trakt`);
       }
     } catch (err) {
       console.error('[Dynamic Sync Error - Trakt]:', err.message);
     }
   }
 
-  // 2. Sync to Simkl (optional)
-  if (simklToken && simklClientId && media.imdbId.startsWith('tt')) {
+  if (simklToken && media.imdbId.startsWith('tt')) {
     try {
       let simklPayload = {};
       if (media.type === 'movie') {
-        simklPayload = {
-          movies: [{ ids: { imdb: media.imdbId } }]
-        };
+        simklPayload = { movies: [{ ids: { imdb: media.imdbId } }] };
       } else if (media.season !== undefined && media.episode !== undefined) {
         simklPayload = {
           shows: [{
@@ -231,8 +216,8 @@ async function performDynamicWatchSync(media, config) {
         };
       }
       if (Object.keys(simklPayload).length > 0) {
-        await fetchSimkl('/sync/history', simklToken, simklClientId, 'POST', simklPayload);
-        console.log(`[Dynamic Sync] Recorded watch on Simkl: ${media.imdbId}`);
+        await fetchSimkl('/sync/history', simklToken, 'POST', simklPayload);
+        console.log(`[Dynamic Sync] Marked ${media.imdbId} on Simkl`);
       }
     } catch (err) {
       console.error('[Dynamic Sync Error - Simkl]:', err.message);
@@ -243,27 +228,21 @@ async function performDynamicWatchSync(media, config) {
 function mapToMeta(item, type) {
   const target = item.movie || item.show;
   if (!target || !target.ids) return null;
-
   const imdbId = target.ids.imdb;
-  const traktId = target.ids.trakt;
-  const id = imdbId || `trakt:${traktId}`;
-  const title = target.title || 'Unknown Title';
-  const year = target.year ? String(target.year) : undefined;
-  const poster = imdbId ? `https://images.metahub.space/poster/medium/${imdbId}/img` : undefined;
-
+  const id = imdbId || `trakt:${target.ids.trakt}`;
   return {
     id,
     type,
-    name: title,
-    poster,
-    year,
+    name: target.title || 'Unknown Title',
+    poster: imdbId ? `https://images.metahub.space/poster/medium/${imdbId}/img` : undefined,
+    year: target.year ? String(target.year) : undefined,
     description: target.overview || ''
   };
 }
 
 async function handleCatalog(catalogId, type, skip, config) {
   const token = config.traktToken || config.token;
-  const clientId = config.traktClientId || config.clientId;
+  const clientId = config.traktClientId || config.clientId || TRAKT_CLIENT_ID;
   if (!token || !clientId) return [];
 
   const page = Math.floor(skip / 20) + 1;
@@ -278,7 +257,7 @@ async function handleCatalog(catalogId, type, skip, config) {
     const seenShows = new Set();
     items = [];
     for (const item of data) {
-      if (item.show && item.show.ids && !seenShows.has(item.show.ids.trakt)) {
+      if (item.show?.ids?.trakt && !seenShows.has(item.show.ids.trakt)) {
         seenShows.add(item.show.ids.trakt);
         const meta = mapToMeta(item, 'series');
         if (meta) items.push(meta);
@@ -314,127 +293,153 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
 
-  // Web UI Setup Dashboard
   if (pathname === '/' || pathname === '/configure') {
     const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Syncribullet Trakt & Multi-Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stremio Trakt Multi-Device Sync</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b0f19; color: #f1f5f9; margin: 0; padding: 2rem; display: flex; justify-content: center; }
-    .card { background: #161e2e; border-radius: 14px; padding: 2rem; max-width: 620px; width: 100%; box-shadow: 0 10px 30px rgba(0,0,0,0.6); border: 1px solid #1e293b; }
-    h1 { font-size: 1.5rem; margin-top: 0; color: #38bdf8; }
-    p { color: #94a3b8; font-size: 0.95rem; line-height: 1.5; }
-    .badge { display: inline-block; background: #0369a1; color: #e0f2fe; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; margin-bottom: 1rem; }
-    label { display: block; margin-top: 1.25rem; font-weight: 600; font-size: 0.85rem; color: #cbd5e1; }
-    input { width: 100%; padding: 0.75rem; margin-top: 0.25rem; border: 1px solid #334155; border-radius: 6px; background: #0b0f19; color: #fff; box-sizing: border-box; }
-    button { background: #0284c7; color: white; border: none; border-radius: 6px; padding: 0.75rem 1.25rem; font-weight: 600; margin-top: 1.25rem; cursor: pointer; width: 100%; transition: background 0.2s; }
-    button:hover { background: #0369a1; }
-    .code-box { background: #0b0f19; border: 1px dashed #38bdf8; border-radius: 8px; padding: 1.25rem; margin-top: 1rem; text-align: center; }
-    .user-code { font-size: 2rem; font-weight: bold; letter-spacing: 5px; color: #38bdf8; margin: 0.5rem 0; }
-    .btn-install { background: #10b981; margin-top: 1rem; text-decoration: none; display: block; text-align: center; color: white; padding: 0.85rem; border-radius: 6px; font-weight: 600; font-size: 1rem; }
-    .btn-install:hover { background: #059669; }
-    .url-display { background: #0b0f19; word-break: break-all; padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.8rem; color: #a5f3fc; margin-top: 0.5rem; border: 1px solid #1e293b; }
-    .hint { font-size: 0.8rem; color: #64748b; margin-top: 0.25rem; }
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b0f19; color: #f1f5f9; margin: 0; padding: 1.5rem; display: flex; justify-content: center; }
+    .card { background: #161e2e; border-radius: 16px; padding: 2rem; max-width: 580px; width: 100%; box-shadow: 0 10px 35px rgba(0,0,0,0.6); border: 1px solid #1e293b; }
+    h1 { font-size: 1.5rem; color: #38bdf8; margin: 0 0 0.5rem 0; }
+    p { color: #94a3b8; font-size: 0.95rem; line-height: 1.5; margin: 0 0 1.5rem 0; }
+    .section { background: #0f172a; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem; border: 1px solid #1e293b; }
+    .section-title { font-size: 0.95rem; font-weight: 700; color: #e2e8f0; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between; }
+    .btn { background: #0284c7; color: white; border: none; border-radius: 8px; padding: 0.85rem 1.25rem; font-weight: 600; font-size: 1rem; cursor: pointer; width: 100%; text-align: center; text-decoration: none; display: block; }
+    .btn:hover { background: #0369a1; }
+    .btn-green { background: #10b981; }
+    .btn-green:hover { background: #059669; }
+    .btn-outline { background: transparent; border: 1px solid #38bdf8; color: #38bdf8; font-size: 0.9rem; padding: 0.6rem; margin-top: 0.5rem; }
+    .btn-outline:hover { background: rgba(56,189,248,0.1); }
+    .code-box { background: #020617; border: 1px dashed #38bdf8; border-radius: 8px; padding: 1.25rem; margin-top: 1rem; text-align: center; }
+    .user-code { font-size: 2.2rem; font-weight: 800; letter-spacing: 6px; color: #38bdf8; margin: 0.5rem 0; font-family: monospace; }
+    .status-text { font-size: 0.85rem; color: #94a3b8; margin: 0.5rem 0 0 0; }
+    .badge-success { background: rgba(16,185,129,0.15); border: 1px solid #10b981; color: #34d399; padding: 0.75rem; border-radius: 8px; font-weight: 600; text-align: center; margin-top: 1rem; }
+    .url-display { background: #020617; word-break: break-all; padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.8rem; color: #a5f3fc; margin-top: 0.5rem; border: 1px solid #1e293b; user-select: all; }
+    input { width: 100%; padding: 0.75rem; border: 1px solid #334155; border-radius: 6px; background: #020617; color: #fff; box-sizing: border-box; font-size: 0.9rem; margin-top: 0.4rem; }
   </style>
 </head>
 <body>
   <div class="card">
-    <span class="badge">Syncribullet Engine</span>
     <h1>Trakt Multi-Device Sync</h1>
-    <p>Uses Syncribullet's automatic subtitle-scrobble hook to sync watch status directly to Trakt across 5+ Stremio and Nuvio devices without hitting Trakt's 1-community-app connection limit.</p>
+    <p>Connect Trakt once. Sync playback and catalogs across 5+ Stremio and Nuvio devices without ever getting logged out.</p>
 
-    <label for="clientId">Trakt Client ID (from trakt.tv/oauth/applications):</label>
-    <input id="clientId" placeholder="Paste Client ID">
+    <div class="section">
+      <div class="section-title">
+        <span>1. Trakt Account</span>
+        <span id="traktBadge" style="font-size:0.8rem; color:#94a3b8;">Not Connected</span>
+      </div>
 
-    <label for="clientSecret">Trakt Client Secret:</label>
-    <input id="clientSecret" type="password" placeholder="Paste Client Secret">
+      <div id="traktInitial">
+        <button id="btnTrakt" class="btn" onclick="startTrakt()">Tap to Connect Trakt</button>
+      </div>
 
-    <label for="simklToken">Simkl Access Token (Optional):</label>
-    <input id="simklToken" placeholder="Leave blank if using only Trakt">
-    <div class="hint">If set, playback will cross-sync to both Trakt and Simkl simultaneously.</div>
+      <div id="traktCodeBox" class="code-box" style="display:none;">
+        <p style="margin:0 0 0.25rem 0; font-size:0.85rem; color:#cbd5e1;">Your activation code:</p>
+        <div id="traktUserCode" class="user-code">----</div>
+        <a id="traktActivateLink" class="btn btn-outline" href="https://auth.trakt.tv/activate" target="_blank">1. Open Trakt Activate in New Tab</a>
+        <button class="btn btn-outline" style="border-color:#64748b; color:#cbd5e1; margin-top:0.4rem;" onclick="copyCode()">2. Copy Code to Clipboard</button>
+        <p id="traktPollStatus" class="status-text">Waiting for you to tap Yes on Trakt...</p>
+      </div>
 
-    <button id="btnStart" onclick="startAuth()">Connect Trakt Account</button>
-
-    <div id="stepCode" class="code-box" style="display:none;">
-      <p style="margin:0;">Open <a id="verifyUrl" href="https://trakt.tv/activate" target="_blank" style="color:#38bdf8; font-weight:bold; text-decoration:underline;">trakt.tv/activate</a> on any phone or browser and enter:</p>
-      <div id="userCode" class="user-code">----</div>
-      <p id="pollStatus" style="font-size:0.85rem; margin:0; color:#94a3b8;">Waiting for authorization from Trakt...</p>
+      <div id="traktConnected" class="badge-success" style="display:none;">
+        Connected to Trakt: <span id="traktUser" style="color:#fff;"></span>
+      </div>
     </div>
 
-    <div id="stepInstall" style="display:none; margin-top:1.5rem;">
-      <a id="stremioLink" class="btn-install" href="#">Install in Stremio (1-Click)</a>
-      <p style="margin-top:1.25rem; margin-bottom:0.25rem; font-weight:600;">Or copy Manifest URL into Nuvio / Stremio Web:</p>
+    <div class="section">
+      <div class="section-title">
+        <span>2. Simkl (Optional)</span>
+        <span id="simklBadge" style="font-size:0.8rem; color:#64748b;">Optional</span>
+      </div>
+      <p style="font-size:0.85rem; margin:0 0 0.5rem 0;">Cross-syncs playback to Simkl at the same time.</p>
+      <input id="simklToken" placeholder="Paste Simkl Token (or leave blank for Trakt only)" oninput="updateUrls()">
+    </div>
+
+    <div id="installSection" style="display:none; margin-top:1.5rem;">
+      <a id="stremioLink" class="btn btn-green" href="#">🚀 Install in Stremio (1-Click)</a>
+      <p style="margin:1.25rem 0 0.25rem 0; font-size:0.85rem; font-weight:600; color:#cbd5e1;">Or copy Manifest URL into Nuvio / Stremio Web:</p>
       <div id="manifestUrl" class="url-display"></div>
     </div>
   </div>
 
   <script>
+    let traktToken = '';
     let pollInterval = null;
 
-    async function startAuth() {
-      const clientId = document.getElementById('clientId').value.trim();
-      const clientSecret = document.getElementById('clientSecret').value.trim();
-      if (!clientId || !clientSecret) return alert('Enter both Trakt Client ID and Client Secret');
-
-      document.getElementById('btnStart').disabled = true;
-      document.getElementById('btnStart').innerText = 'Requesting code...';
+    async function startTrakt() {
+      const btn = document.getElementById('btnTrakt');
+      btn.disabled = true;
+      btn.innerText = 'Requesting code...';
 
       try {
-        const res = await fetch('/api/auth/start', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientId, clientSecret })
-        });
+        const res = await fetch('/api/auth/start', { method: 'POST' });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to start auth');
+        if (!res.ok) throw new Error(data.error || 'Failed to request Trakt code');
 
-        document.getElementById('userCode').innerText = data.user_code;
-        document.getElementById('verifyUrl').href = data.verification_url;
-        document.getElementById('stepCode').style.display = 'block';
-        document.getElementById('btnStart').style.display = 'none';
+        document.getElementById('traktUserCode').innerText = data.user_code;
+        document.getElementById('traktActivateLink').href = data.verification_url || 'https://auth.trakt.tv/activate';
+        document.getElementById('traktInitial').style.display = 'none';
+        document.getElementById('traktCodeBox').style.display = 'block';
 
-        pollToken(data.device_code, clientId, clientSecret, data.interval || 5);
+        pollTraktToken(data.device_code, data.interval || 6);
       } catch (err) {
         alert(err.message);
-        document.getElementById('btnStart').disabled = false;
-        document.getElementById('btnStart').innerText = 'Connect Trakt Account';
+        btn.disabled = false;
+        btn.innerText = 'Tap to Connect Trakt';
       }
     }
 
-    function pollToken(deviceCode, clientId, clientSecret, interval) {
+    function copyCode() {
+      const code = document.getElementById('traktUserCode').innerText;
+      navigator.clipboard.writeText(code);
+      alert('Code ' + code + ' copied to clipboard!');
+    }
+
+    function pollTraktToken(deviceCode, interval) {
       pollInterval = setInterval(async () => {
         try {
           const res = await fetch('/api/auth/token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ deviceCode, clientId, clientSecret })
+            body: JSON.stringify({ deviceCode })
           });
           const data = await res.json();
           if (res.ok && data.access_token) {
             clearInterval(pollInterval);
-            document.getElementById('stepCode').style.display = 'none';
-            document.getElementById('stepInstall').style.display = 'block';
+            traktToken = data.access_token;
 
-            const simklToken = document.getElementById('simklToken').value.trim();
-            const configObj = {
-              traktToken: data.access_token,
-              traktClientId: clientId,
-              simklToken: simklToken || undefined
-            };
+            document.getElementById('traktCodeBox').style.display = 'none';
+            document.getElementById('traktBadge').innerText = 'Connected';
+            document.getElementById('traktBadge').style.color = '#34d399';
+            document.getElementById('traktUser').innerText = data.username ? '@' + data.username : 'Active';
+            document.getElementById('traktConnected').style.display = 'block';
+            document.getElementById('installSection').style.display = 'block';
 
-            const enc = btoa(JSON.stringify(configObj)).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
-            const host = window.location.host;
-            const protocol = window.location.protocol;
-            const manifest = protocol + '//' + host + '/' + enc + '/manifest.json';
-            const stremio = 'stremio://' + host + '/' + enc + '/manifest.json';
-
-            document.getElementById('manifestUrl').innerText = manifest;
-            document.getElementById('stremioLink').href = stremio;
+            updateUrls();
           }
         } catch (_) {}
       }, interval * 1000);
+    }
+
+    function updateUrls() {
+      if (!traktToken) return;
+      const simkl = document.getElementById('simklToken').value.trim();
+      const configObj = {
+        traktToken: traktToken,
+        simklToken: simkl || undefined
+      };
+
+      const enc = btoa(JSON.stringify(configObj)).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
+      const origin = window.location.origin;
+      const manifest = origin + '/' + enc + '/manifest.json';
+      const stremio = manifest.replace(/^https?:\\/\\//, 'stremio://');
+
+      document.getElementById('manifestUrl').innerText = manifest;
+      document.getElementById('stremioLink').href = stremio;
     }
   </script>
 </body>
@@ -442,51 +447,65 @@ const server = http.createServer(async (req, res) => {
     return sendHtml(res, html);
   }
 
-  // API: Start Device Code Auth
   if (pathname === '/api/auth/start' && req.method === 'POST') {
-    let body = '';
-    req.on('data', chunk => { body += chunk; });
-    req.on('end', async () => {
-      try {
-        const { clientId } = JSON.parse(body || '{}');
-        const traktRes = await fetch(`${TRAKT_API_URL}/oauth/device/code`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ client_id: clientId })
-        });
-        const data = await traktRes.json();
-        return sendJson(res, traktRes.status, data);
-      } catch (err) {
-        return sendJson(res, 500, { error: err.message });
-      }
-    });
-    return;
+    try {
+      const traktRes = await fetch(`${TRAKT_API_URL}/oauth/device/code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: TRAKT_CLIENT_ID })
+      });
+      const data = await traktRes.json();
+      return sendJson(res, traktRes.status, data);
+    } catch (err) {
+      return sendJson(res, 500, { error: err.message });
+    }
   }
 
-  // API: Poll Device Token
   if (pathname === '/api/auth/token' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
     req.on('end', async () => {
       try {
-        const { deviceCode, clientId, clientSecret } = JSON.parse(body || '{}');
+        const { deviceCode } = JSON.parse(body || '{}');
         const traktRes = await fetch(`${TRAKT_API_URL}/oauth/device/token`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             code: deviceCode,
-            client_id: clientId,
-            client_secret: clientSecret
+            client_id: TRAKT_CLIENT_ID
           })
         });
-        const data = await traktRes.json();
-        if (traktRes.ok && data.access_token) {
-          savedConfig = { traktToken: data.access_token, traktClientId: clientId };
-          try {
-            fs.writeFileSync(CONFIG_FILE, JSON.stringify(savedConfig, null, 2));
-          } catch (_) {}
+
+        if (!traktRes.ok) {
+          return sendJson(res, traktRes.status, { status: 'pending' });
         }
-        return sendJson(res, traktRes.status, data);
+
+        const tokenData = await traktRes.json();
+        let username = '';
+        try {
+          const userRes = await fetch(`${TRAKT_API_URL}/users/me`, {
+            headers: {
+              'Content-Type': 'application/json',
+              'trakt-api-version': '2',
+              'trakt-api-key': TRAKT_CLIENT_ID,
+              'Authorization': `Bearer ${tokenData.access_token}`
+            }
+          });
+          if (userRes.ok) {
+            const userData = await userRes.json();
+            username = userData.username || '';
+          }
+        } catch (_) {}
+
+        savedConfig = { traktToken: tokenData.access_token, traktClientId: TRAKT_CLIENT_ID };
+        try {
+          fs.writeFileSync(CONFIG_FILE, JSON.stringify(savedConfig, null, 2));
+        } catch (_) {}
+
+        return sendJson(res, 200, {
+          access_token: tokenData.access_token,
+          username
+        });
       } catch (err) {
         return sendJson(res, 500, { error: err.message });
       }
@@ -494,7 +513,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Parse Stremio Route
   const parts = pathname.replace(/^\/+|\/+$/g, '').split('/');
   let config = (savedConfig.traktToken || savedConfig.token) ? savedConfig : null;
   let offset = 0;
@@ -507,12 +525,10 @@ const server = http.createServer(async (req, res) => {
 
   const routeParts = parts.slice(offset);
 
-  // Manifest endpoint
   if (routeParts.length === 1 && routeParts[0] === 'manifest.json') {
     return sendJson(res, 200, MANIFEST_TEMPLATE);
   }
 
-  // Subtitles endpoint (Syncribullet Dynamic Playback Scrobble Hook)
   if (routeParts[0] === 'subtitles' && routeParts.length >= 3) {
     const type = routeParts[1];
     const idWithExt = routeParts[2];
@@ -521,16 +537,12 @@ const server = http.createServer(async (req, res) => {
     if (config && media.imdbId) {
       const syncKey = `${media.imdbId}:${media.season || 0}:${media.episode || 0}`;
       if (shouldSync(syncKey)) {
-        performDynamicWatchSync(media, config).catch(err => {
-          console.error('[Background Sync Exception]:', err.message);
-        });
+        performDynamicWatchSync(media, config).catch(() => {});
       }
     }
-
     return sendJson(res, 200, { subtitles: [] });
   }
 
-  // Catalog endpoint
   if (routeParts[0] === 'catalog' && routeParts.length >= 3) {
     const type = routeParts[1];
     const idWithExt = routeParts[2];
@@ -543,15 +555,12 @@ const server = http.createServer(async (req, res) => {
       if (match) skip = parseInt(match[1], 10);
     }
 
-    if (!config) {
-      return sendJson(res, 200, { metas: [] });
-    }
+    if (!config) return sendJson(res, 200, { metas: [] });
 
     try {
       const metas = await handleCatalog(catalogId, type, skip, config);
       return sendJson(res, 200, { metas });
     } catch (err) {
-      console.error(`Error handling catalog ${catalogId}:`, err.message);
       return sendJson(res, 200, { metas: [] });
     }
   }
@@ -560,6 +569,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Syncribullet Trakt Addon running at http://localhost:${PORT}`);
-  console.log(`Configure at http://localhost:${PORT}/configure`);
+  console.log(`Server running at http://localhost:${PORT}`);
 });
