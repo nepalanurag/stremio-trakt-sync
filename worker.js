@@ -32,8 +32,8 @@ const GENRE_OPTIONS = [
 const BASE_CATALOGS = [
   {
     type: 'series',
-    id: 'org.multisync.stremio',
-    name: 'MultiSync (Trakt & Simkl)',
+    id: 'trakt_playback_series',
+    name: 'Trakt - Continue Watching',
     extra: [{ name: 'skip', isRequired: false }],
     extraSupported: ['skip']
   },
@@ -159,9 +159,9 @@ function buildManifest(config) {
   }
 
   return {
-    id: 'org.syncribullet.multisync',
-    version: '2.5.1',
-    name: 'SyncriBullet - Multi-Tracker Sync',
+    id: 'org.multisync.stremio',
+    version: '2.5.2',
+    name: 'MultiSync (Trakt & Simkl)',
     description: 'Syncs Trakt and Simkl Watchlists, Continue Watching, and History to Stremio and Nuvio across all devices without account logouts.',
     logo: 'https://raw.githubusercontent.com/nepalanurag/stremio-trakt-sync/main/icon.svg',
     background: 'https://images.metahub.space/background/medium/tt0903747/img',
