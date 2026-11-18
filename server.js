@@ -154,20 +154,31 @@ const SIMKL_CATALOGS = [
 ];
 
 function buildManifest(config) {
-  const catalogs = [...BASE_CATALOGS];
+  const allCatalogs = [...BASE_CATALOGS];
   if (config && config.simklToken) {
-    catalogs.push(...SIMKL_CATALOGS);
+    allCatalogs.push(...SIMKL_CATALOGS);
   }
+
+  let catalogs = allCatalogs;
+  if (config && Array.isArray(config.catalogs) && config.catalogs.length > 0) {
+    const selected = new Set(config.catalogs);
+    catalogs = allCatalogs.filter(c => selected.has(c.id));
+  }
+
   return {
     id: 'org.syncribullet.multisync',
-    version: '2.3.0',
+    version: '2.4.0',
     name: 'Trakt Multi-Device Sync',
     description: 'Syncs Trakt and Simkl Watchlists, Continue Watching, and History to Stremio and Nuvio across all devices without account logouts.',
     logo: 'https://raw.githubusercontent.com/nepalanurag/stremio-trakt-sync/main/icon.svg',
     background: 'https://images.metahub.space/background/medium/tt0903747/img',
     resources: ['catalog', 'subtitles'],
     types: ['movie', 'series'],
-    catalogs
+    catalogs,
+    behaviorHints: {
+      configurable: true,
+      configurationRequired: false
+    }
   };
 }
 

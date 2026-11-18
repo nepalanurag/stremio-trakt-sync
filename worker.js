@@ -147,20 +147,31 @@ const SIMKL_CATALOGS = [
 ];
 
 function buildManifest(config) {
-  const catalogs = [...BASE_CATALOGS];
+  const allCatalogs = [...BASE_CATALOGS];
   if (config && config.simklToken) {
-    catalogs.push(...SIMKL_CATALOGS);
+    allCatalogs.push(...SIMKL_CATALOGS);
   }
+
+  let catalogs = allCatalogs;
+  if (config && Array.isArray(config.catalogs) && config.catalogs.length > 0) {
+    const selected = new Set(config.catalogs);
+    catalogs = allCatalogs.filter(c => selected.has(c.id));
+  }
+
   return {
     id: 'org.syncribullet.multisync',
-    version: '2.3.0',
+    version: '2.4.0',
     name: 'Trakt Multi-Device Sync',
     description: 'Syncs Trakt and Simkl Watchlists, Continue Watching, and History to Stremio and Nuvio across all devices without account logouts.',
     logo: 'https://raw.githubusercontent.com/nepalanurag/stremio-trakt-sync/main/icon.svg',
     background: 'https://images.metahub.space/background/medium/tt0903747/img',
     resources: ['catalog', 'subtitles'],
     types: ['movie', 'series'],
-    catalogs
+    catalogs,
+    behaviorHints: {
+      configurable: true,
+      configurationRequired: false
+    }
   };
 }
 
@@ -459,8 +470,58 @@ export default {
       const url = new URL(request.url);
       const pathname = url.pathname;
 
-      // Web Dashboard
-      if (pathname === '/' || pathname === '/configure') {
+      // Icon Branding
+      if (pathname === '/icon.svg') {
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="traktRed" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ed1c40"/>
+      <stop offset="100%" stop-color="#be123c"/>
+    </linearGradient>
+    <linearGradient id="cyanAccent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#bg)"/>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="none" stroke="url(#traktRed)" stroke-width="12" opacity="0.4"/>
+  <path d="M 176 140 L 336 140 C 352 140 364 152 364 168 C 364 184 352 196 336 196 L 284 196 L 284 348 C 284 364 272 376 256 376 C 240 376 228 364 228 348 L 228 196 L 176 196 C 160 196 148 184 148 168 C 148 152 160 140 176 140 Z" fill="url(#traktRed)"/>
+  <path d="M 390 220 A 150 150 0 0 0 256 106 L 256 70 L 190 125 L 256 180 L 256 144 A 112 112 0 0 1 354 232 Z" fill="url(#cyanAccent)"/>
+  <path d="M 122 292 A 150 150 0 0 0 256 406 L 256 442 L 322 387 L 256 332 L 256 368 A 112 112 0 0 1 158 280 Z" fill="url(#cyanAccent)"/>
+</svg>`;
+        return new Response(svg, {
+          headers: {
+            'Content-Type': 'image/svg+xml',
+            'Cache-Control': 'public, max-age=604800',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
+      }
+
+      // Route Parsing
+      const parts = pathname.replace(/^\/+|\/+$/g, '').split('/');
+      let config = null;
+      let offset = 0;
+
+      const potentialConfig = parseConfig(parts[0]);
+      if (potentialConfig) {
+        config = potentialConfig;
+        offset = 1;
+      }
+
+      const routeParts = parts.slice(offset);
+
+      // Web Dashboard (Root, /configure, or /:config/configure)
+      const isConfigurePage =
+        pathname === '/' ||
+        pathname === '/configure' ||
+        (potentialConfig && (routeParts.length === 0 || (routeParts.length === 1 && routeParts[0] === 'configure')));
+
+      if (isConfigurePage) {
         const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -470,9 +531,11 @@ export default {
   <style>
     * { box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b0f19; color: #f1f5f9; margin: 0; padding: 1.5rem; display: flex; justify-content: center; }
-    .card { background: #161e2e; border-radius: 16px; padding: 2rem; max-width: 580px; width: 100%; box-shadow: 0 10px 35px rgba(0,0,0,0.6); border: 1px solid #1e293b; }
-    h1 { font-size: 1.5rem; color: #38bdf8; margin: 0 0 0.5rem 0; }
-    p { color: #94a3b8; font-size: 0.95rem; line-height: 1.5; margin: 0 0 1.5rem 0; }
+    .card { background: #161e2e; border-radius: 16px; padding: 2rem; max-width: 620px; width: 100%; box-shadow: 0 10px 35px rgba(0,0,0,0.6); border: 1px solid #1e293b; }
+    .header-row { display: flex; align-items: center; gap: 0.85rem; margin-bottom: 0.5rem; }
+    .header-row img { width: 36px; height: 36px; }
+    h1 { font-size: 1.5rem; color: #38bdf8; margin: 0; }
+    p { color: #94a3b8; font-size: 0.92rem; line-height: 1.5; margin: 0 0 1.25rem 0; }
     .section { background: #0f172a; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem; border: 1px solid #1e293b; }
     .section-title { font-size: 0.95rem; font-weight: 700; color: #e2e8f0; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between; }
     .btn { background: #0284c7; color: white; border: none; border-radius: 8px; padding: 0.85rem 1.25rem; font-weight: 600; font-size: 1rem; cursor: pointer; width: 100%; transition: background 0.15s ease-in-out; text-align: center; text-decoration: none; display: block; }
@@ -484,9 +547,25 @@ export default {
     .code-box { background: #020617; border: 1px dashed #38bdf8; border-radius: 8px; padding: 1.25rem; margin-top: 1rem; text-align: center; }
     .user-code { font-size: 2.2rem; font-weight: 800; letter-spacing: 6px; color: #38bdf8; margin: 0.5rem 0; font-family: monospace; }
     .status-text { font-size: 0.85rem; color: #94a3b8; margin: 0.5rem 0 0 0; }
-    .badge-success { background: rgba(16,185,129,0.15); border: 1px solid #10b981; color: #34d399; padding: 0.75rem; border-radius: 8px; font-weight: 600; text-align: center; margin-top: 1rem; }
+    .badge-success { background: rgba(16,185,129,0.12); border: 1px solid #10b981; color: #34d399; padding: 0.75rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; margin-top: 0.75rem; }
+    .btn-disconnect { background: transparent; border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; border-radius: 4px; padding: 0.2rem 0.55rem; font-size: 0.75rem; cursor: pointer; transition: all 0.15s; }
+    .btn-disconnect:hover { background: rgba(239, 68, 68, 0.15); border-color: #ef4444; }
     .url-display { background: #020617; word-break: break-all; padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.8rem; color: #a5f3fc; margin-top: 0.5rem; border: 1px solid #1e293b; user-select: all; }
     input { width: 100%; padding: 0.75rem; border: 1px solid #334155; border-radius: 6px; background: #020617; color: #fff; box-sizing: border-box; font-size: 0.9rem; margin-top: 0.4rem; }
+    
+    /* Catalog item styles (Syncribullet style) */
+    .catalog-list { display: flex; flex-direction: column; gap: 0.45rem; margin-top: 0.5rem; }
+    .catalog-item { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 0.65rem 0.85rem; display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer; transition: all 0.15s ease; user-select: none; }
+    .catalog-item:hover { border-color: #38bdf8; background: #070d1e; }
+    .catalog-item.checked { border-color: #0284c7; }
+    .catalog-item input[type="checkbox"] { margin-top: 0.2rem; width: 1.15rem; height: 1.15rem; accent-color: #0284c7; cursor: pointer; flex-shrink: 0; }
+    .catalog-content { flex: 1; min-width: 0; }
+    .catalog-title-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+    .catalog-title { font-size: 0.88rem; font-weight: 600; color: #f8fafc; }
+    .catalog-badge { font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.4rem; border-radius: 4px; background: #1e293b; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+    .catalog-desc { font-size: 0.76rem; color: #64748b; margin-top: 0.15rem; }
+    .btn-xs { background: #1e293b; color: #cbd5e1; border: 1px solid #334155; border-radius: 4px; padding: 0.25rem 0.6rem; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .btn-xs:hover { background: #334155; color: #fff; }
   </style>
 </head>
 <body>
@@ -501,10 +580,13 @@ export default {
     </div>
 
     <div id="mainDashboard">
-      <h1>Trakt Multi-Device Sync</h1>
-      <p>Connect Trakt once. Sync playback and catalogs across 5+ Stremio and Nuvio devices without ever getting logged out.</p>
+      <div class="header-row">
+        <img src="/icon.svg" alt="logo">
+        <h1>Trakt Multi-Device Sync</h1>
+      </div>
+      <p>Connect Trakt and Simkl once. Sync playback and catalogs across 5+ Stremio and Nuvio devices without ever getting logged out.</p>
 
-      <!-- Trakt Section -->
+      <!-- 1. Trakt Section -->
       <div class="section">
         <div class="section-title">
           <span>1. Trakt Account</span>
@@ -523,12 +605,13 @@ export default {
           <p id="traktPollStatus" class="status-text">Waiting for you to tap Yes on Trakt...</p>
         </div>
 
-        <div id="traktConnected" class="badge-success" style="display:none;">
-          Connected to Trakt: <span id="traktUser" style="color:#fff;"></span>
+        <div id="traktConnected" class="badge-success" style="display:none; align-items:center; justify-content:space-between;">
+          <span>Connected to Trakt: <strong id="traktUser" style="color:#fff;"></strong></span>
+          <button class="btn-disconnect" onclick="disconnectTrakt()">Disconnect</button>
         </div>
       </div>
 
-      <!-- Simkl Section -->
+      <!-- 2. Simkl Section -->
       <div class="section">
         <div class="section-title">
           <span>2. Simkl (Optional)</span>
@@ -547,21 +630,41 @@ export default {
           <p id="simklPollStatus" class="status-text">Waiting for authorization on Simkl...</p>
         </div>
 
-        <div id="simklConnected" class="badge-success" style="display:none;">
-          Connected to Simkl
+        <div id="simklConnected" class="badge-success" style="display:none; align-items:center; justify-content:space-between;">
+          <span>Connected to Simkl</span>
+          <button class="btn-disconnect" onclick="disconnectSimkl()">Disconnect</button>
         </div>
 
         <div style="margin-top:0.75rem;">
           <p style="font-size:0.75rem; color:#64748b; margin:0;">Or paste token directly:</p>
-          <input id="simklToken" placeholder="Paste existing Simkl Token" oninput="updateUrls()">
+          <input id="simklTokenInput" placeholder="Paste existing Simkl Token" oninput="onSimklTokenManualInput()">
         </div>
       </div>
 
-      <!-- Install -->
+      <!-- 3. Catalog Customization (Syncribullet Style) -->
+      <div class="section" id="catalogSection">
+        <div class="section-title">
+          <span>3. Home & Discover Catalogs</span>
+          <div style="display:flex; gap:0.4rem;">
+            <button class="btn-xs" onclick="toggleAllCatalogs(true)">Select All</button>
+            <button class="btn-xs" onclick="toggleAllCatalogs(false)">Deselect All</button>
+          </div>
+        </div>
+        <p style="font-size:0.85rem; margin:0 0 0.5rem 0;">Choose which Trakt and Simkl rows appear on your Stremio & Nuvio Home Screen and Discover tabs:</p>
+
+        <div style="font-size:0.78rem; font-weight:700; color:#38bdf8; text-transform:uppercase; letter-spacing:0.75px; margin:0.75rem 0 0.4rem 0;">Trakt Rows</div>
+        <div id="traktCatalogList" class="catalog-list"></div>
+
+        <div id="simklCatalogHeader" style="font-size:0.78rem; font-weight:700; color:#38bdf8; text-transform:uppercase; letter-spacing:0.75px; margin:1.1rem 0 0.4rem 0; display:none;">Simkl Rows</div>
+        <div id="simklCatalogList" class="catalog-list" style="display:none;"></div>
+      </div>
+
+      <!-- 4. Install Section -->
       <div id="installSection" style="display:none; margin-top:1.5rem;">
-        <a id="stremioLink" class="btn btn-green" href="#">🚀 Install in Stremio (1-Click)</a>
-        <p style="margin:1.25rem 0 0.25rem 0; font-size:0.85rem; font-weight:600; color:#cbd5e1;">Or copy Manifest URL into Nuvio / Stremio Web:</p>
+        <a id="stremioLink" class="btn btn-green" href="#" style="font-size:1.05rem;">🚀 Install in Stremio (1-Click)</a>
+        <p style="margin:1.25rem 0 0.35rem 0; font-size:0.85rem; font-weight:600; color:#cbd5e1;">Or copy Manifest URL into Nuvio / Stremio Web:</p>
         <div id="manifestUrl" class="url-display"></div>
+        <button id="btnCopyManifest" class="btn btn-outline" style="margin-top:0.5rem;" onclick="copyManifestUrl()">📋 Copy Manifest URL</button>
       </div>
     </div>
   </div>
@@ -571,12 +674,30 @@ export default {
     const SERVER_SIMKL_CLIENT_ID = "${simklClientId}";
     const SERVER_ACCESS_PASSWORD = "${accessPassword}";
     const SERVER_ALLOWED_USERS = ${JSON.stringify(allowedUsers)};
+    const INITIAL_CONFIG = ${JSON.stringify(config || null)};
+
+    const CATALOG_DEFINITIONS = [
+      { id: 'trakt_playback_series', group: 'trakt', type: 'series', title: 'Trakt - Continue Watching', desc: 'TV shows with in-progress episodes' },
+      { id: 'trakt_playback_movies', group: 'trakt', type: 'movie', title: 'Trakt - Continue Watching', desc: 'Movies paused in progress' },
+      { id: 'trakt_watchlist_movies', group: 'trakt', type: 'movie', title: 'Trakt - Watchlist', desc: 'Movies in your watchlist (17 genre filters)' },
+      { id: 'trakt_watchlist_series', group: 'trakt', type: 'series', title: 'Trakt - Watchlist', desc: 'TV shows in your watchlist (17 genre filters)' },
+      { id: 'trakt_history_movies', group: 'trakt', type: 'movie', title: 'Trakt - History', desc: 'Recently watched movies (17 genre filters)' },
+      { id: 'trakt_history_series', group: 'trakt', type: 'series', title: 'Trakt - History', desc: 'Recently watched TV shows (17 genre filters)' },
+      { id: 'trakt_collection_movies', group: 'trakt', type: 'movie', title: 'Trakt - Collection', desc: 'Movies in your collection (17 genre filters)' },
+      { id: 'trakt_collection_series', group: 'trakt', type: 'series', title: 'Trakt - Collection', desc: 'TV shows in your collection (17 genre filters)' },
+      { id: 'simkl_watching_shows', group: 'simkl', type: 'series', title: 'Simkl - Currently Watching', desc: 'TV shows currently watching on Simkl' },
+      { id: 'simkl_plantowatch_movies', group: 'simkl', type: 'movie', title: 'Simkl - Plan to Watch', desc: 'Movies in Simkl Plan to Watch (17 genre filters)' },
+      { id: 'simkl_plantowatch_shows', group: 'simkl', type: 'series', title: 'Simkl - Plan to Watch', desc: 'TV shows in Simkl Plan to Watch (17 genre filters)' },
+      { id: 'simkl_completed_movies', group: 'simkl', type: 'movie', title: 'Simkl - Completed', desc: 'Movies completed on Simkl (17 genre filters)' }
+    ];
 
     let currentPassword = '';
     let traktToken = '';
+    let traktUser = '';
     let activeTraktClientId = SERVER_TRAKT_CLIENT_ID;
     let simklToken = '';
     let activeSimklClientId = SERVER_SIMKL_CLIENT_ID;
+    let selectedCatalogs = null;
     let pollInterval = null;
     let simklPollInterval = null;
 
@@ -601,12 +722,119 @@ export default {
       if (val === SERVER_ACCESS_PASSWORD) {
         currentPassword = val;
         sessionStorage.setItem('addon_pass', val);
+        localStorage.setItem('addon_pass', val);
         document.getElementById('lockSection').style.display = 'none';
         document.getElementById('mainDashboard').style.display = 'block';
         updateUrls();
       } else {
         alert('Invalid access password');
       }
+    }
+
+    function renderCatalogs() {
+      const traktContainer = document.getElementById('traktCatalogList');
+      const simklContainer = document.getElementById('simklCatalogList');
+      const simklHeader = document.getElementById('simklCatalogHeader');
+
+      traktContainer.innerHTML = '';
+      simklContainer.innerHTML = '';
+
+      const isSimklActive = !!simklToken;
+      simklHeader.style.display = isSimklActive ? 'block' : 'none';
+      simklContainer.style.display = isSimklActive ? 'flex' : 'none';
+
+      CATALOG_DEFINITIONS.forEach(cat => {
+        const isChecked = selectedCatalogs === null ? true : selectedCatalogs.includes(cat.id);
+        const item = document.createElement('div');
+        item.className = 'catalog-item' + (isChecked ? ' checked' : '');
+        item.id = 'cat-wrap-' + cat.id;
+
+        const chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.id = 'chk-' + cat.id;
+        chk.checked = isChecked;
+        chk.onchange = (e) => {
+          e.stopPropagation();
+          onCatalogToggle(cat.id, chk.checked);
+        };
+
+        const content = document.createElement('div');
+        content.className = 'catalog-content';
+
+        const row = document.createElement('div');
+        row.className = 'catalog-title-row';
+
+        const title = document.createElement('span');
+        title.className = 'catalog-title';
+        title.innerText = cat.title;
+
+        const badge = document.createElement('span');
+        badge.className = 'catalog-badge';
+        badge.innerText = cat.type;
+
+        row.appendChild(title);
+        row.appendChild(badge);
+
+        const desc = document.createElement('div');
+        desc.className = 'catalog-desc';
+        desc.innerText = cat.desc;
+
+        content.appendChild(row);
+        content.appendChild(desc);
+
+        item.appendChild(chk);
+        item.appendChild(content);
+
+        item.onclick = (e) => {
+          if (e.target !== chk) {
+            chk.checked = !chk.checked;
+            onCatalogToggle(cat.id, chk.checked);
+          }
+        };
+
+        if (cat.group === 'trakt') {
+          traktContainer.appendChild(item);
+        } else if (cat.group === 'simkl') {
+          simklContainer.appendChild(item);
+        }
+      });
+    }
+
+    function onCatalogToggle(catId, checked) {
+      if (selectedCatalogs === null) {
+        selectedCatalogs = CATALOG_DEFINITIONS.map(c => c.id);
+      }
+      if (checked) {
+        if (!selectedCatalogs.includes(catId)) selectedCatalogs.push(catId);
+      } else {
+        selectedCatalogs = selectedCatalogs.filter(id => id !== catId);
+      }
+      const wrap = document.getElementById('cat-wrap-' + catId);
+      if (wrap) {
+        if (checked) wrap.classList.add('checked');
+        else wrap.classList.remove('checked');
+      }
+      localStorage.setItem('selected_catalogs', JSON.stringify(selectedCatalogs));
+      updateUrls();
+    }
+
+    function toggleAllCatalogs(select) {
+      if (select) {
+        selectedCatalogs = CATALOG_DEFINITIONS.map(c => c.id);
+      } else {
+        selectedCatalogs = [];
+      }
+      CATALOG_DEFINITIONS.forEach(c => {
+        const chk = document.getElementById('chk-' + c.id);
+        if (chk) chk.checked = select;
+        const wrap = document.getElementById('cat-wrap-' + c.id);
+        if (wrap) {
+          if (select) wrap.classList.add('checked');
+          else wrap.classList.remove('checked');
+        }
+      });
+      localStorage.setItem('selected_catalogs', JSON.stringify(selectedCatalogs));
+      updateUrls();
     }
 
     async function startTrakt() {
@@ -625,7 +853,7 @@ export default {
       try {
         let data = null;
 
-        // Method 1: Direct browser fetch to Trakt API (bypasses Cloudflare Worker egress IP rate limits)
+        // Method 1: Direct browser fetch to Trakt API
         try {
           const directRes = await fetch('https://api.trakt.tv/oauth/device/code', {
             method: 'POST',
@@ -751,19 +979,36 @@ export default {
             }
 
             traktToken = tokenData.access_token;
+            traktUser = username;
             activeTraktClientId = clientId;
 
+            localStorage.setItem('trakt_token', traktToken);
+            localStorage.setItem('trakt_user', traktUser);
+            localStorage.setItem('trakt_client_id', activeTraktClientId);
+
             document.getElementById('traktCodeBox').style.display = 'none';
+            document.getElementById('traktInitial').style.display = 'none';
             document.getElementById('traktBadge').innerText = 'Connected';
             document.getElementById('traktBadge').style.color = '#34d399';
             document.getElementById('traktUser').innerText = username ? '@' + username : 'Active';
-            document.getElementById('traktConnected').style.display = 'block';
-            document.getElementById('installSection').style.display = 'block';
+            document.getElementById('traktConnected').style.display = 'flex';
 
             updateUrls();
           }
         } catch (_) {}
       }, (interval || 6) * 1000);
+    }
+
+    function disconnectTrakt() {
+      traktToken = '';
+      traktUser = '';
+      localStorage.removeItem('trakt_token');
+      localStorage.removeItem('trakt_user');
+      document.getElementById('traktConnected').style.display = 'none';
+      document.getElementById('traktBadge').innerText = 'Not Connected';
+      document.getElementById('traktBadge').style.color = '#94a3b8';
+      document.getElementById('traktInitial').style.display = 'block';
+      updateUrls();
     }
 
     async function startSimkl() {
@@ -881,25 +1126,82 @@ export default {
             clearInterval(simklPollInterval);
             simklToken = token;
             activeSimklClientId = clientId;
-            document.getElementById('simklToken').value = simklToken;
+
+            localStorage.setItem('simkl_token', simklToken);
+            localStorage.setItem('simkl_client_id', activeSimklClientId);
+
+            document.getElementById('simklTokenInput').value = simklToken;
             document.getElementById('simklCodeBox').style.display = 'none';
+            document.getElementById('simklBtnWrap').style.display = 'none';
             document.getElementById('simklBadge').innerText = 'Connected';
             document.getElementById('simklBadge').style.color = '#34d399';
-            document.getElementById('simklConnected').style.display = 'block';
+            document.getElementById('simklConnected').style.display = 'flex';
+
+            renderCatalogs();
             updateUrls();
           }
         } catch (_) {}
       }, (interval || 5) * 1000);
     }
 
+    function disconnectSimkl() {
+      simklToken = '';
+      localStorage.removeItem('simkl_token');
+      document.getElementById('simklConnected').style.display = 'none';
+      document.getElementById('simklBadge').innerText = 'Optional';
+      document.getElementById('simklBadge').style.color = '#94a3b8';
+      document.getElementById('simklBtnWrap').style.display = 'block';
+      document.getElementById('simklTokenInput').value = '';
+      renderCatalogs();
+      updateUrls();
+    }
+
+    function onSimklTokenManualInput() {
+      const val = document.getElementById('simklTokenInput').value.trim();
+      simklToken = val;
+      if (val) {
+        localStorage.setItem('simkl_token', val);
+        document.getElementById('simklBadge').innerText = 'Connected';
+        document.getElementById('simklBadge').style.color = '#34d399';
+      } else {
+        localStorage.removeItem('simkl_token');
+        document.getElementById('simklBadge').innerText = 'Optional';
+        document.getElementById('simklBadge').style.color = '#94a3b8';
+      }
+      renderCatalogs();
+      updateUrls();
+    }
+
+    function copyManifestUrl() {
+      const url = document.getElementById('manifestUrl').innerText;
+      navigator.clipboard.writeText(url);
+      const btn = document.getElementById('btnCopyManifest');
+      const orig = btn.innerText;
+      btn.innerText = '✓ Copied to Clipboard!';
+      btn.style.borderColor = '#10b981';
+      btn.style.color = '#34d399';
+      setTimeout(() => {
+        btn.innerText = orig;
+        btn.style.borderColor = '';
+        btn.style.color = '';
+      }, 2000);
+    }
+
     function updateUrls() {
-      if (!traktToken) return;
-      const simkl = document.getElementById('simklToken').value.trim();
+      if (!traktToken && !simklToken) {
+        document.getElementById('installSection').style.display = 'none';
+        return;
+      }
+
+      const activeCatalogs = selectedCatalogs === null ? CATALOG_DEFINITIONS.map(c => c.id) : selectedCatalogs;
+
       const configObj = {
-        traktToken: traktToken,
-        traktClientId: activeTraktClientId || SERVER_TRAKT_CLIENT_ID || undefined,
-        simklToken: simkl || undefined,
-        simklClientId: activeSimklClientId || SERVER_SIMKL_CLIENT_ID || undefined,
+        traktToken: traktToken || undefined,
+        traktClientId: traktToken ? (activeTraktClientId || SERVER_TRAKT_CLIENT_ID || undefined) : undefined,
+        traktUser: traktUser || undefined,
+        simklToken: simklToken || undefined,
+        simklClientId: simklToken ? (activeSimklClientId || SERVER_SIMKL_CLIENT_ID || undefined) : undefined,
+        catalogs: activeCatalogs,
         pass: SERVER_ACCESS_PASSWORD ? currentPassword : undefined
       };
 
@@ -910,46 +1212,72 @@ export default {
 
       document.getElementById('manifestUrl').innerText = manifest;
       document.getElementById('stremioLink').href = stremio;
+      document.getElementById('installSection').style.display = 'block';
     }
 
-    checkLock();
+    function init() {
+      checkLock();
+
+      // 1. Check if URL provided existing config
+      if (INITIAL_CONFIG) {
+        if (INITIAL_CONFIG.traktToken) {
+          localStorage.setItem('trakt_token', INITIAL_CONFIG.traktToken);
+          if (INITIAL_CONFIG.traktUser) localStorage.setItem('trakt_user', INITIAL_CONFIG.traktUser);
+          if (INITIAL_CONFIG.traktClientId) localStorage.setItem('trakt_client_id', INITIAL_CONFIG.traktClientId);
+        }
+        if (INITIAL_CONFIG.simklToken) {
+          localStorage.setItem('simkl_token', INITIAL_CONFIG.simklToken);
+          if (INITIAL_CONFIG.simklClientId) localStorage.setItem('simkl_client_id', INITIAL_CONFIG.simklClientId);
+        }
+        if (Array.isArray(INITIAL_CONFIG.catalogs)) {
+          localStorage.setItem('selected_catalogs', JSON.stringify(INITIAL_CONFIG.catalogs));
+        }
+      }
+
+      // 2. Load from localStorage
+      traktToken = localStorage.getItem('trakt_token') || '';
+      traktUser = localStorage.getItem('trakt_user') || '';
+      activeTraktClientId = localStorage.getItem('trakt_client_id') || SERVER_TRAKT_CLIENT_ID;
+      simklToken = localStorage.getItem('simkl_token') || '';
+      activeSimklClientId = localStorage.getItem('simkl_client_id') || SERVER_SIMKL_CLIENT_ID;
+
+      const savedCats = localStorage.getItem('selected_catalogs');
+      if (savedCats) {
+        try {
+          selectedCatalogs = JSON.parse(savedCats);
+        } catch (_) {}
+      }
+
+      // Render Trakt UI
+      if (traktToken) {
+        document.getElementById('traktInitial').style.display = 'none';
+        document.getElementById('traktCodeBox').style.display = 'none';
+        document.getElementById('traktConnected').style.display = 'flex';
+        document.getElementById('traktBadge').innerText = 'Connected';
+        document.getElementById('traktBadge').style.color = '#34d399';
+        document.getElementById('traktUser').innerText = traktUser ? '@' + traktUser : 'Active';
+      }
+
+      // Render Simkl UI
+      if (simklToken) {
+        document.getElementById('simklBtnWrap').style.display = 'none';
+        document.getElementById('simklCodeBox').style.display = 'none';
+        document.getElementById('simklConnected').style.display = 'flex';
+        document.getElementById('simklBadge').innerText = 'Connected';
+        document.getElementById('simklBadge').style.color = '#34d399';
+        document.getElementById('simklTokenInput').value = simklToken;
+      }
+
+      renderCatalogs();
+      updateUrls();
+    }
+
+    init();
   </script>
 </body>
 </html>`;
         return new Response(html, {
           headers: { 'Content-Type': 'text/html; charset=utf-8' }
-        });
-      }
-
-      // Icon Branding
-      if (pathname === '/icon.svg') {
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0f172a"/>
-      <stop offset="100%" stop-color="#1e293b"/>
-    </linearGradient>
-    <linearGradient id="traktRed" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ed1c40"/>
-      <stop offset="100%" stop-color="#be123c"/>
-    </linearGradient>
-    <linearGradient id="cyanAccent" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38bdf8"/>
-      <stop offset="100%" stop-color="#0284c7"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="128" fill="url(#bg)"/>
-  <rect x="16" y="16" width="480" height="480" rx="112" fill="none" stroke="url(#traktRed)" stroke-width="12" opacity="0.4"/>
-  <path d="M 176 140 L 336 140 C 352 140 364 152 364 168 C 364 184 352 196 336 196 L 284 196 L 284 348 C 284 364 272 376 256 376 C 240 376 228 364 228 348 L 228 196 L 176 196 C 160 196 148 184 148 168 C 148 152 160 140 176 140 Z" fill="url(#traktRed)"/>
-  <path d="M 390 220 A 150 150 0 0 0 256 106 L 256 70 L 190 125 L 256 180 L 256 144 A 112 112 0 0 1 354 232 Z" fill="url(#cyanAccent)"/>
-  <path d="M 122 292 A 150 150 0 0 0 256 406 L 256 442 L 322 387 L 256 332 L 256 368 A 112 112 0 0 1 158 280 Z" fill="url(#cyanAccent)"/>
-</svg>`;
-        return new Response(svg, {
-          headers: {
-            'Content-Type': 'image/svg+xml',
-            'Cache-Control': 'public, max-age=604800',
-            'Access-Control-Allow-Origin': '*'
-          }
         });
       }
 
@@ -1123,19 +1451,6 @@ export default {
           return jsonResponse({ error: err.message }, 500);
         }
       }
-
-      // Route Parsing
-      const parts = pathname.replace(/^\/+|\/+$/g, '').split('/');
-      let config = null;
-      let offset = 0;
-
-      const potentialConfig = parseConfig(parts[0]);
-      if (potentialConfig) {
-        config = potentialConfig;
-        offset = 1;
-      }
-
-      const routeParts = parts.slice(offset);
 
       // Passcode Safeguard Enforcement
       if (accessPassword) {
