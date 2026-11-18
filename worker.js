@@ -160,8 +160,8 @@ function buildManifest(config) {
 
   return {
     id: 'org.syncribullet.multisync',
-    version: '2.4.2',
-    name: 'Trakt Multi-Device Sync',
+    version: '2.5.0',
+    name: 'SyncriBullet - Multi-Tracker Sync',
     description: 'Syncs Trakt and Simkl Watchlists, Continue Watching, and History to Stremio and Nuvio across all devices without account logouts.',
     logo: 'https://raw.githubusercontent.com/nepalanurag/stremio-trakt-sync/main/icon.svg',
     background: 'https://images.metahub.space/background/medium/tt0903747/img',
@@ -523,150 +523,690 @@ export default {
 
       if (isConfigurePage) {
         const html = `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Stremio Trakt Multi-Device Sync</title>
+  <title>SyncriBullet - Stremio & Nuvio Multi-Tracker Sync</title>
   <style>
-    * { box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b0f19; color: #f1f5f9; margin: 0; padding: 1.5rem; display: flex; justify-content: center; }
-    .card { background: #161e2e; border-radius: 16px; padding: 2rem; max-width: 620px; width: 100%; box-shadow: 0 10px 35px rgba(0,0,0,0.6); border: 1px solid #1e293b; }
-    .header-row { display: flex; align-items: center; gap: 0.85rem; margin-bottom: 0.5rem; }
-    .header-row img { width: 36px; height: 36px; }
-    h1 { font-size: 1.5rem; color: #38bdf8; margin: 0; }
-    p { color: #94a3b8; font-size: 0.92rem; line-height: 1.5; margin: 0 0 1.25rem 0; }
-    .section { background: #0f172a; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem; border: 1px solid #1e293b; }
-    .section-title { font-size: 0.95rem; font-weight: 700; color: #e2e8f0; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between; }
-    .btn { background: #0284c7; color: white; border: none; border-radius: 8px; padding: 0.85rem 1.25rem; font-weight: 600; font-size: 1rem; cursor: pointer; width: 100%; transition: background 0.15s ease-in-out; text-align: center; text-decoration: none; display: block; }
-    .btn:hover { background: #0369a1; }
-    .btn-green { background: #10b981; }
-    .btn-green:hover { background: #059669; }
-    .btn-outline { background: transparent; border: 1px solid #38bdf8; color: #38bdf8; font-size: 0.9rem; padding: 0.6rem; margin-top: 0.5rem; }
-    .btn-outline:hover { background: rgba(56,189,248,0.1); }
-    .code-box { background: #020617; border: 1px dashed #38bdf8; border-radius: 8px; padding: 1.25rem; margin-top: 1rem; text-align: center; }
-    .user-code { font-size: 2.2rem; font-weight: 800; letter-spacing: 6px; color: #38bdf8; margin: 0.5rem 0; font-family: monospace; }
-    .status-text { font-size: 0.85rem; color: #94a3b8; margin: 0.5rem 0 0 0; }
-    .badge-success { background: rgba(16,185,129,0.12); border: 1px solid #10b981; color: #34d399; padding: 0.75rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; margin-top: 0.75rem; }
-    .btn-disconnect { background: transparent; border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; border-radius: 4px; padding: 0.2rem 0.55rem; font-size: 0.75rem; cursor: pointer; transition: all 0.15s; }
-    .btn-disconnect:hover { background: rgba(239, 68, 68, 0.15); border-color: #ef4444; }
-    .url-display { background: #020617; word-break: break-all; padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.8rem; color: #a5f3fc; margin-top: 0.5rem; border: 1px solid #1e293b; user-select: all; }
-    input { width: 100%; padding: 0.75rem; border: 1px solid #334155; border-radius: 6px; background: #020617; color: #fff; box-sizing: border-box; font-size: 0.9rem; margin-top: 0.4rem; }
-    
-    /* Catalog item styles (Syncribullet style) */
-    .catalog-list { display: flex; flex-direction: column; gap: 0.45rem; margin-top: 0.5rem; }
-    .catalog-item { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 0.65rem 0.85rem; display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer; transition: all 0.15s ease; user-select: none; }
-    .catalog-item:hover { border-color: #38bdf8; background: #070d1e; }
-    .catalog-item.checked { border-color: #0284c7; }
-    .catalog-item input[type="checkbox"] { margin-top: 0.2rem; width: 1.15rem; height: 1.15rem; accent-color: #0284c7; cursor: pointer; flex-shrink: 0; }
-    .catalog-content { flex: 1; min-width: 0; }
-    .catalog-title-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-    .catalog-title { font-size: 0.88rem; font-weight: 600; color: #f8fafc; }
-    .catalog-badge { font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.4rem; border-radius: 4px; background: #1e293b; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
-    .catalog-desc { font-size: 0.76rem; color: #64748b; margin-top: 0.15rem; }
-    .btn-xs { background: #1e293b; color: #cbd5e1; border: 1px solid #334155; border-radius: 4px; padding: 0.25rem 0.6rem; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
-    .btn-xs:hover { background: #334155; color: #fff; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #000000;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2.5rem 1rem 4rem 1rem;
+    }
+
+    /* SyncriBullet Header */
+    .header-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 2rem;
+    }
+    .syncri-logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 0;
+      user-select: none;
+      margin-bottom: 0.85rem;
+    }
+    .syncri-blocks {
+      display: inline-flex;
+      border-radius: 4px;
+      overflow: hidden;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+    }
+    .blk {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 48px;
+      font-size: 2rem;
+      font-weight: 800;
+      color: #ffffff;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    }
+    .blk-s { background: #96ceb4; }
+    .blk-y { background: #e53935; }
+    .blk-n { background: #1e88e5; }
+    .blk-c { background: #00bcd4; }
+    .blk-r { background: #ff7043; }
+    .blk-i { background: #263238; }
+    .syncri-text {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #ffffff;
+      margin-left: 6px;
+      letter-spacing: -0.5px;
+    }
+    .syncri-ver {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #94a3b8;
+      margin-left: 8px;
+      margin-top: 8px;
+    }
+    .github-link a {
+      color: #cbd5e1;
+      display: inline-flex;
+      transition: opacity 0.2s;
+    }
+    .github-link a:hover {
+      opacity: 0.75;
+    }
+
+    /* Main Container Cards */
+    .dashboard-wrap {
+      width: 100%;
+      max-width: 620px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    .sb-card {
+      background: #253327;
+      border: 1px solid #334436;
+      border-radius: 16px;
+      padding: 1.85rem 1.5rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      text-align: center;
+    }
+    .sb-card-title {
+      font-size: 1.65rem;
+      font-weight: 700;
+      color: #e2ece4;
+      margin-bottom: 0.75rem;
+      letter-spacing: -0.3px;
+    }
+    .sb-card-subtitle {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #e2ece4;
+      margin: 1rem 0 0.75rem 0;
+    }
+
+    /* Pill Buttons (SyncriBullet Style) */
+    .pills-row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+    }
+    .service-pill {
+      background: #19241b;
+      border: 1px solid #314234;
+      border-radius: 9999px;
+      padding: 0.45rem 1.15rem 0.45rem 0.65rem;
+      color: #f1f5f9;
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.65rem;
+      transition: all 0.15s ease-in-out;
+      user-select: none;
+    }
+    .service-pill:hover {
+      background: #202e23;
+      border-color: #455a49;
+      transform: translateY(-1px);
+    }
+    .service-pill.active-pill {
+      border-color: #9edbb2;
+    }
+    .pill-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+    .icon-simkl { background: #000; color: #fff; border: 1px solid #444; }
+    .icon-trakt { background: #ed1c40; color: #fff; }
+    .icon-stremio { background: #725bb7; color: #fff; }
+    .icon-nuvio { background: #0d9488; color: #fff; }
+    .icon-sb { background: #3b503e; color: #9edbb2; font-size: 0.65rem; }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #475569;
+      margin-left: 0.15rem;
+    }
+    .status-dot.connected {
+      background: #22c55e;
+      box-shadow: 0 0 6px #22c55e;
+    }
+
+    /* Modal Backdrop & Container */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.78);
+      backdrop-filter: blur(5px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 1rem;
+    }
+    .modal-container {
+      background: #19231b;
+      border: 1px solid #2d3e30;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 540px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.85);
+      padding: 1.85rem;
+      max-height: 88vh;
+      overflow-y: auto;
+      animation: modalFadeIn 0.15s ease-out;
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.97); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .modal-header {
+      text-align: center;
+      margin-bottom: 1.25rem;
+    }
+    .modal-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #ffffff;
+    }
+    .modal-section-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #e2ece4;
+      margin: 0.75rem 0 0.85rem 0;
+    }
+
+    /* Tabs (SyncriBullet Style) */
+    .tabs-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.25rem;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      background: #6a8c76;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .tab-btn:hover {
+      background: #7ca089;
+    }
+    .tab-btn.tab-active {
+      background: #9edbb2;
+      color: #0f2516;
+      font-weight: 700;
+    }
+
+    /* Tab Content Areas */
+    .tab-pane {
+      display: none;
+    }
+    .tab-pane.pane-active {
+      display: block;
+    }
+
+    /* Catalog Checkbox List */
+    .cat-checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      margin: 1rem 0;
+    }
+    .cat-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      cursor: pointer;
+      user-select: none;
+    }
+    .cat-item input[type="checkbox"] {
+      width: 17px;
+      height: 17px;
+      accent-color: #2563eb;
+      margin-top: 2px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .cat-details {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+    .cat-name {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #ffffff;
+    }
+    .cat-type {
+      font-size: 0.8rem;
+      color: #8ea495;
+    }
+
+    /* Action Buttons */
+    .btn-save {
+      background: #9edbb2;
+      color: #0d2214;
+      border: none;
+      border-radius: 9999px;
+      padding: 0.6rem 1.4rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .btn-save:hover {
+      background: #b1e4c3;
+    }
+    .btn-danger-pill {
+      background: #fca5a5;
+      color: #7f1d1d;
+      border: none;
+      border-radius: 9999px;
+      padding: 0.55rem 1.25rem;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 0.75rem;
+      transition: background 0.15s;
+    }
+    .btn-danger-pill:hover {
+      background: #f87171;
+    }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid #425846;
+      color: #cbd5e1;
+      border-radius: 9999px;
+      padding: 0.55rem 1.25rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-ghost:hover {
+      background: rgba(255,255,255,0.05);
+      border-color: #6a8c76;
+    }
+
+    /* Code activation box */
+    .code-box {
+      background: #111a13;
+      border: 1px dashed #6a8c76;
+      border-radius: 10px;
+      padding: 1.25rem;
+      margin: 1rem 0;
+      text-align: center;
+    }
+    .code-display {
+      font-size: 2.1rem;
+      font-weight: 800;
+      letter-spacing: 5px;
+      color: #9edbb2;
+      font-family: monospace;
+      margin: 0.5rem 0;
+    }
+    .code-btn {
+      display: inline-block;
+      background: transparent;
+      border: 1px solid #9edbb2;
+      color: #9edbb2;
+      border-radius: 6px;
+      padding: 0.5rem 1rem;
+      font-size: 0.88rem;
+      font-weight: 600;
+      text-decoration: none;
+      margin-top: 0.4rem;
+      cursor: pointer;
+    }
+    .code-btn:hover {
+      background: rgba(158,219,178,0.12);
+    }
+
+    .modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 1.75rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid #28382b;
+    }
+
+    /* Toast Notification */
+    #toast {
+      position: fixed;
+      bottom: 2rem;
+      background: #9edbb2;
+      color: #0d2214;
+      font-weight: 700;
+      padding: 0.75rem 1.5rem;
+      border-radius: 9999px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      display: none;
+      z-index: 2000;
+      animation: toastIn 0.2s ease;
+    }
+    @keyframes toastIn {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
   </style>
 </head>
 <body>
-  <div class="card">
-    <!-- Master Passcode Lock Section (shown only if ACCESS_PASSWORD is configured) -->
-    <div id="lockSection" style="display:none; text-align:center; padding:1.5rem 0;">
-      <div style="font-size:2.5rem; margin-bottom:0.5rem;">🔒</div>
-      <h2 style="color:#38bdf8; margin:0 0 0.5rem 0; font-size:1.3rem;">Private Addon Instance</h2>
-      <p style="font-size:0.85rem; color:#94a3b8; margin:0 0 1rem 0;">This instance is protected with a master passcode. Enter your ACCESS_PASSWORD to configure.</p>
-      <input id="passInput" type="password" placeholder="Enter Access Password" onkeydown="if(event.key==='Enter') unlockDashboard()" style="max-width:320px; margin:0 auto 0.75rem auto; text-align:center;">
-      <button class="btn" style="max-width:320px; margin:0 auto;" onclick="unlockDashboard()">Unlock Configuration</button>
+
+  <!-- SyncriBullet Header -->
+  <div class="header-container">
+    <div class="syncri-logo">
+      <div class="syncri-blocks">
+        <span class="blk blk-s">S</span>
+        <span class="blk blk-y">y</span>
+        <span class="blk blk-n">n</span>
+        <span class="blk blk-c">c</span>
+        <span class="blk blk-r">r</span>
+        <span class="blk blk-i">i</span>
+      </div>
+      <span class="syncri-text">Bullet</span>
+      <span class="syncri-ver">(v2.4.2)</span>
+    </div>
+    <div class="github-link">
+      <a href="https://github.com/nepalanurag/stremio-trakt-sync" target="_blank" rel="noopener">
+        <svg height="24" width="24" viewBox="0 0 16 16" fill="#cbd5e1">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+      </a>
+    </div>
+  </div>
+
+  <!-- Dashboard Container -->
+  <div class="dashboard-wrap" id="mainDashboard">
+    
+    <!-- 1. Receivers Card -->
+    <div class="sb-card">
+      <div class="sb-card-title">Receivers</div>
+      
+      <div class="sb-card-subtitle">Sync</div>
+      <div class="pills-row">
+        <!-- Simkl Pill -->
+        <button class="service-pill" onclick="openModal('simkl')">
+          <div class="pill-icon icon-simkl">S</div>
+          <span>Simkl</span>
+          <span id="simklStatusDot" class="status-dot"></span>
+        </button>
+
+        <!-- Trakt Pill -->
+        <button class="service-pill" onclick="openModal('trakt')">
+          <div class="pill-icon icon-trakt">T</div>
+          <span>Trakt</span>
+          <span id="traktStatusDot" class="status-dot"></span>
+        </button>
+      </div>
+
+      <div class="sb-card-subtitle" style="margin-top: 1.5rem;">General Settings</div>
+      <div class="pills-row">
+        <button class="service-pill" onclick="openModal('general')">
+          <div class="pill-icon icon-sb">SB</div>
+          <span>syncribullet</span>
+        </button>
+      </div>
     </div>
 
-    <div id="mainDashboard" style="display:none;">
-      <div class="header-row">
-        <img src="/icon.svg" alt="logo">
-        <h1>Trakt Multi-Device Sync</h1>
+    <!-- 2. Senders Card -->
+    <div class="sb-card">
+      <div class="sb-card-title">Senders</div>
+
+      <div class="sb-card-subtitle">Applications</div>
+      <div class="pills-row">
+        <!-- Stremio Pill -->
+        <button class="service-pill" onclick="openModal('stremio')">
+          <div class="pill-icon icon-stremio">▶</div>
+          <span>Stremio</span>
+        </button>
+
+        <!-- Nuvio Pill -->
+        <button class="service-pill" onclick="openModal('nuvio')">
+          <div class="pill-icon icon-nuvio">N</div>
+          <span>Nuvio</span>
+        </button>
       </div>
-      <p>Connect Trakt and Simkl once. Sync playback and catalogs across 5+ Stremio and Nuvio devices without ever getting logged out.</p>
+    </div>
+  </div>
 
-      <!-- 1. Trakt Section -->
-      <div class="section">
-        <div class="section-title">
-          <span>1. Trakt Account</span>
-          <span id="traktBadge" style="font-size:0.8rem; color:#94a3b8;">Not Connected</span>
-        </div>
+  <!-- Toast -->
+  <div id="toast">Settings Saved</div>
 
-        <div id="traktInitial">
-          <button id="btnTrakt" class="btn" onclick="startTrakt()">Tap to Connect Trakt</button>
-        </div>
+  <!-- ================= MODALS ================= -->
 
-        <div id="traktCodeBox" class="code-box" style="display:none;">
-          <p style="margin:0 0 0.25rem 0; font-size:0.85rem; color:#cbd5e1;">Your activation code:</p>
-          <div id="traktUserCode" class="user-code">----</div>
-          <a id="traktActivateLink" class="btn btn-outline" href="https://auth.trakt.tv/activate" target="_blank">1. Open Trakt Activate in New Tab</a>
-          <button class="btn btn-outline" style="border-color:#64748b; color:#cbd5e1; margin-top:0.4rem;" onclick="copyCode()">2. Copy Code to Clipboard</button>
-          <p id="traktPollStatus" class="status-text">Waiting for you to tap Yes on Trakt...</p>
-        </div>
+  <!-- Modal Backdrop -->
+  <div class="modal-backdrop" id="modalBackdrop" onclick="handleBackdropClick(event)">
 
-        <div id="traktConnected" class="badge-success" style="display:none; align-items:center; justify-content:space-between;">
-          <span>Connected to Trakt: <strong id="traktUser" style="color:#fff;"></strong></span>
-          <button class="btn-disconnect" onclick="disconnectTrakt()">Disconnect</button>
-        </div>
-      </div>
-
-      <!-- 2. Simkl Section -->
-      <div class="section">
-        <div class="section-title">
-          <span>2. Simkl (Optional)</span>
-          <span id="simklBadge" style="font-size:0.8rem; color:#94a3b8;">Optional</span>
-        </div>
-        <p style="font-size:0.85rem; margin:0 0 0.5rem 0;">Cross-syncs playback and watchlists with Simkl.</p>
-        <div id="simklBtnWrap">
-          <button id="btnSimkl" class="btn btn-outline" style="border-color:#38bdf8; color:#38bdf8;" onclick="startSimkl()">Tap to Connect Simkl</button>
-        </div>
-
-        <div id="simklCodeBox" class="code-box" style="display:none;">
-          <p style="margin:0 0 0.25rem 0; font-size:0.85rem; color:#cbd5e1;">Your Simkl PIN code:</p>
-          <div id="simklUserCode" class="user-code">----</div>
-          <a id="simklActivateLink" class="btn btn-outline" href="https://simkl.com/pin" target="_blank">1. Open simkl.com/pin in New Tab</a>
-          <button class="btn btn-outline" style="border-color:#64748b; color:#cbd5e1; margin-top:0.4rem;" onclick="copySimklCode()">2. Copy Code to Clipboard</button>
-          <p id="simklPollStatus" class="status-text">Waiting for authorization on Simkl...</p>
-        </div>
-
-        <div id="simklConnected" class="badge-success" style="display:none; align-items:center; justify-content:space-between;">
-          <span>Connected to Simkl</span>
-          <button class="btn-disconnect" onclick="disconnectSimkl()">Disconnect</button>
-        </div>
-
-        <div style="margin-top:0.75rem;">
-          <p style="font-size:0.75rem; color:#64748b; margin:0;">Or paste token directly:</p>
-          <input id="simklTokenInput" placeholder="Paste existing Simkl Token" oninput="onSimklTokenManualInput()">
-        </div>
+    <!-- SIMKL MODAL -->
+    <div class="modal-container" id="modalSimkl" style="display:none;">
+      <div class="modal-header">
+        <h2 class="modal-title">Simkl</h2>
+        <div class="modal-section-title">Settings</div>
       </div>
 
-      <!-- 3. Catalog Customization (Syncribullet Style) -->
-      <div class="section" id="catalogSection">
-        <div class="section-title">
-          <span>3. Home & Discover Catalogs</span>
+      <!-- Tabs -->
+      <div class="tabs-row">
+        <button class="tab-btn tab-active" id="tabBtn-simkl-catalogs" onclick="switchTab('simkl', 'catalogs')">Catalogs</button>
+        <button class="tab-btn" id="tabBtn-simkl-sync" onclick="switchTab('simkl', 'sync')">Live Sync</button>
+        <button class="tab-btn" id="tabBtn-simkl-creds" onclick="switchTab('simkl', 'creds')">Credentials</button>
+      </div>
+
+      <!-- Tab 1: Catalogs -->
+      <div class="tab-pane pane-active" id="pane-simkl-catalogs">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+          <span style="font-size:0.8rem; color:#8ea495;">Toggle catalogs for Stremio/Nuvio</span>
           <div style="display:flex; gap:0.4rem;">
-            <button class="btn-xs" onclick="toggleAllCatalogs(true)">Select All</button>
-            <button class="btn-xs" onclick="toggleAllCatalogs(false)">Deselect All</button>
+            <button class="btn-ghost" style="padding:0.2rem 0.6rem; font-size:0.75rem;" onclick="toggleGroupCatalogs('simkl', true)">All</button>
+            <button class="btn-ghost" style="padding:0.2rem 0.6rem; font-size:0.75rem;" onclick="toggleGroupCatalogs('simkl', false)">None</button>
           </div>
         </div>
-        <p style="font-size:0.85rem; margin:0 0 0.5rem 0;">Choose which Trakt and Simkl rows appear on your Stremio & Nuvio Home Screen and Discover tabs:</p>
-
-        <div style="font-size:0.78rem; font-weight:700; color:#38bdf8; text-transform:uppercase; letter-spacing:0.75px; margin:0.75rem 0 0.4rem 0;">Trakt Rows</div>
-        <div id="traktCatalogList" class="catalog-list"></div>
-
-        <div id="simklCatalogHeader" style="font-size:0.78rem; font-weight:700; color:#38bdf8; text-transform:uppercase; letter-spacing:0.75px; margin:1.1rem 0 0.4rem 0; display:none;">Simkl Rows</div>
-        <div id="simklCatalogList" class="catalog-list" style="display:none;"></div>
+        <div class="cat-checkbox-group" id="simklCatGroup"></div>
       </div>
 
-      <!-- 4. Install Section -->
-      <div id="installSection" style="display:none; margin-top:1.5rem;">
-        <a id="stremioLink" class="btn btn-green" href="#" style="font-size:1.05rem;">🚀 Install in Stremio (1-Click)</a>
-        <p style="margin:1.25rem 0 0.35rem 0; font-size:0.85rem; font-weight:600; color:#cbd5e1;">Or copy Manifest URL into Nuvio / Stremio Web:</p>
-        <div id="manifestUrl" class="url-display"></div>
-        <button id="btnCopyManifest" class="btn btn-outline" style="margin-top:0.5rem;" onclick="copyManifestUrl()">📋 Copy Manifest URL</button>
+      <!-- Tab 2: Live Sync -->
+      <div class="tab-pane" id="pane-simkl-sync">
+        <div class="cat-checkbox-group">
+          <label class="cat-item">
+            <input type="checkbox" id="syncSimklMovie" checked>
+            <div class="cat-details">
+              <span class="cat-name">movie</span>
+              <span class="cat-type">Scrobble movies on playback start</span>
+            </div>
+          </label>
+          <label class="cat-item">
+            <input type="checkbox" id="syncSimklSeries" checked>
+            <div class="cat-details">
+              <span class="cat-name">series</span>
+              <span class="cat-type">Scrobble TV episodes on playback start</span>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Tab 3: Credentials -->
+      <div class="tab-pane" id="pane-simkl-creds">
+        <div id="simklCredsConnected" style="display:none;">
+          <p style="font-size:0.92rem; color:#fca5a5; line-height:1.5; margin-bottom:1rem;">
+            This will clear all credentials and remove all the settings associated with Simkl. Resetting to the default settings.
+          </p>
+          <button class="btn-danger-pill" onclick="disconnectSimkl()">Remove Credentials</button>
+        </div>
+
+        <div id="simklCredsDisconnected">
+          <p style="font-size:0.9rem; color:#8ea495; margin-bottom:0.75rem;">Connect your Simkl account to sync watchlists and playback history.</p>
+          <button class="code-btn" style="width:100%; padding:0.75rem;" id="btnStartSimkl" onclick="startSimkl()">Tap to Connect Simkl</button>
+          
+          <div class="code-box" id="simklCodeBox" style="display:none;">
+            <p style="font-size:0.85rem; color:#cbd5e1; margin-bottom:0.25rem;">Your Simkl PIN code:</p>
+            <div class="code-display" id="simklUserCode">----</div>
+            <a class="code-btn" id="simklActivateLink" href="https://simkl.com/pin" target="_blank">1. Open simkl.com/pin in New Tab</a>
+            <button class="code-btn" style="margin-left:0.4rem;" onclick="copySimklCode()">2. Copy Code</button>
+            <p style="font-size:0.8rem; color:#8ea495; margin-top:0.75rem;">Waiting for authorization on Simkl...</p>
+          </div>
+
+          <div style="margin-top:1.25rem;">
+            <p style="font-size:0.78rem; color:#64748b; margin-bottom:0.3rem;">Or paste existing Simkl Token:</p>
+            <input id="simklTokenInput" style="width:100%; padding:0.6rem; background:#111a13; border:1px solid #334436; border-radius:6px; color:#fff;" placeholder="Paste Simkl Token" oninput="onSimklTokenInput()">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-save" onclick="saveAndClose()">Save Settings</button>
+        <button class="btn-ghost" onclick="closeModal()">Close</button>
       </div>
     </div>
+
+    <!-- TRAKT MODAL -->
+    <div class="modal-container" id="modalTrakt" style="display:none;">
+      <div class="modal-header">
+        <h2 class="modal-title">Trakt</h2>
+        <div class="modal-section-title">Settings</div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs-row">
+        <button class="tab-btn tab-active" id="tabBtn-trakt-catalogs" onclick="switchTab('trakt', 'catalogs')">Catalogs</button>
+        <button class="tab-btn" id="tabBtn-trakt-sync" onclick="switchTab('trakt', 'sync')">Live Sync</button>
+        <button class="tab-btn" id="tabBtn-trakt-creds" onclick="switchTab('trakt', 'creds')">Credentials</button>
+      </div>
+
+      <!-- Tab 1: Catalogs -->
+      <div class="tab-pane pane-active" id="pane-trakt-catalogs">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+          <span style="font-size:0.8rem; color:#8ea495;">Toggle catalogs for Stremio/Nuvio</span>
+          <div style="display:flex; gap:0.4rem;">
+            <button class="btn-ghost" style="padding:0.2rem 0.6rem; font-size:0.75rem;" onclick="toggleGroupCatalogs('trakt', true)">All</button>
+            <button class="btn-ghost" style="padding:0.2rem 0.6rem; font-size:0.75rem;" onclick="toggleGroupCatalogs('trakt', false)">None</button>
+          </div>
+        </div>
+        <div class="cat-checkbox-group" id="traktCatGroup"></div>
+      </div>
+
+      <!-- Tab 2: Live Sync -->
+      <div class="tab-pane" id="pane-trakt-sync">
+        <div class="cat-checkbox-group">
+          <label class="cat-item">
+            <input type="checkbox" id="syncTraktMovie" checked>
+            <div class="cat-details">
+              <span class="cat-name">movie</span>
+              <span class="cat-type">Scrobble movies on playback start</span>
+            </div>
+          </label>
+          <label class="cat-item">
+            <input type="checkbox" id="syncTraktSeries" checked>
+            <div class="cat-details">
+              <span class="cat-name">series</span>
+              <span class="cat-type">Scrobble TV episodes on playback start</span>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Tab 3: Credentials -->
+      <div class="tab-pane" id="pane-trakt-creds">
+        <div id="traktCredsConnected" style="display:none;">
+          <div style="background:#111a13; border:1px solid #334436; padding:0.85rem; border-radius:8px; margin-bottom:1rem;">
+            Connected to Trakt: <strong id="traktUserName" style="color:#9edbb2;"></strong>
+          </div>
+          <p style="font-size:0.92rem; color:#fca5a5; line-height:1.5; margin-bottom:1rem;">
+            This will clear all credentials and remove all the settings associated with Trakt. Resetting to the default settings.
+          </p>
+          <button class="btn-danger-pill" onclick="disconnectTrakt()">Remove Credentials</button>
+        </div>
+
+        <div id="traktCredsDisconnected">
+          <p style="font-size:0.9rem; color:#8ea495; margin-bottom:0.75rem;">Connect your Trakt account to bypass the 1-device limit and sync library.</p>
+          <button class="code-btn" style="width:100%; padding:0.75rem;" id="btnStartTrakt" onclick="startTrakt()">Tap to Connect Trakt</button>
+          
+          <div class="code-box" id="traktCodeBox" style="display:none;">
+            <p style="font-size:0.85rem; color:#cbd5e1; margin-bottom:0.25rem;">Your activation code:</p>
+            <div class="code-display" id="traktUserCode">----</div>
+            <a class="code-btn" id="traktActivateLink" href="https://auth.trakt.tv/activate" target="_blank">1. Open Trakt Activate</a>
+            <button class="code-btn" style="margin-left:0.4rem;" onclick="copyTraktCode()">2. Copy Code</button>
+            <p style="font-size:0.8rem; color:#8ea495; margin-top:0.75rem;">Waiting for you to tap Yes on Trakt...</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-save" onclick="saveAndClose()">Save Settings</button>
+        <button class="btn-ghost" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+
+    <!-- STREMIO / SENDER MODAL -->
+    <div class="modal-container" id="modalStremio" style="display:none;">
+      <div class="modal-header">
+        <h2 class="modal-title">Stremio & Nuvio</h2>
+        <div class="modal-section-title">Install Addon</div>
+      </div>
+
+      <p style="font-size:0.92rem; color:#cbd5e1; line-height:1.5; margin-bottom:1.25rem;">
+        Your custom multi-tracker addon is configured and ready to install. Catalogs and playback scrobbler will sync seamlessly.
+      </p>
+
+      <div style="display:flex; flex-direction:column; gap:0.75rem;">
+        <a id="stremioInstallBtn" class="code-btn" style="background:#9edbb2; color:#0f2516; text-align:center; padding:0.85rem; font-size:1.05rem; font-weight:700; border:none;" href="#">
+          🚀 Install in Stremio (1-Click)
+        </a>
+      </div>
+
+      <div style="margin-top:1.5rem;">
+        <div style="font-size:0.85rem; font-weight:600; color:#e2ece4; margin-bottom:0.4rem;">Manifest URL (for Nuvio / Stremio Web):</div>
+        <div id="stremioManifestDisplay" style="background:#111a13; border:1px solid #334436; border-radius:6px; padding:0.75rem; font-family:monospace; font-size:0.8rem; color:#9edbb2; word-break:break-all; user-select:all;"></div>
+        <button class="code-btn" id="btnCopyManifest" style="width:100%; margin-top:0.5rem;" onclick="copyManifest()">📋 Copy Manifest URL</button>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-save" onclick="closeModal()">Done</button>
+      </div>
+    </div>
+
+    <!-- GENERAL SETTINGS MODAL -->
+    <div class="modal-container" id="modalGeneral" style="display:none;">
+      <div class="modal-header">
+        <h2 class="modal-title">SyncriBullet</h2>
+        <div class="modal-section-title">Instance Info</div>
+      </div>
+
+      <div style="font-size:0.92rem; color:#cbd5e1; line-height:1.6;">
+        <p style="margin-bottom:0.75rem;"><strong>Engine:</strong> Cloudflare Serverless Edge Worker</p>
+        <p style="margin-bottom:0.75rem;"><strong>Trakt Sync:</strong> Direct CORS Bypass + Scrobble Debounce</p>
+        <p style="margin-bottom:0.75rem;"><strong>Simkl Sync:</strong> RFC 8628 Device Flow + MetaHub Post-processing</p>
+        <p style="margin-bottom:0.75rem;"><strong>Security:</strong> ${accessPassword ? '🔒 Protected by Master Passcode' : '🔓 Public Instance'}</p>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-save" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+
   </div>
 
   <script>
@@ -677,18 +1217,18 @@ export default {
     const INITIAL_CONFIG = ${JSON.stringify(config || null)};
 
     const CATALOG_DEFINITIONS = [
-      { id: 'trakt_playback_series', group: 'trakt', type: 'series', title: 'Trakt - Continue Watching', desc: 'TV shows with in-progress episodes' },
-      { id: 'trakt_playback_movies', group: 'trakt', type: 'movie', title: 'Trakt - Continue Watching', desc: 'Movies paused in progress' },
-      { id: 'trakt_watchlist_movies', group: 'trakt', type: 'movie', title: 'Trakt - Watchlist', desc: 'Movies in your watchlist (17 genre filters)' },
-      { id: 'trakt_watchlist_series', group: 'trakt', type: 'series', title: 'Trakt - Watchlist', desc: 'TV shows in your watchlist (17 genre filters)' },
-      { id: 'trakt_history_movies', group: 'trakt', type: 'movie', title: 'Trakt - History', desc: 'Recently watched movies (17 genre filters)' },
-      { id: 'trakt_history_series', group: 'trakt', type: 'series', title: 'Trakt - History', desc: 'Recently watched TV shows (17 genre filters)' },
-      { id: 'trakt_collection_movies', group: 'trakt', type: 'movie', title: 'Trakt - Collection', desc: 'Movies in your collection (17 genre filters)' },
-      { id: 'trakt_collection_series', group: 'trakt', type: 'series', title: 'Trakt - Collection', desc: 'TV shows in your collection (17 genre filters)' },
-      { id: 'simkl_watching_shows', group: 'simkl', type: 'series', title: 'Simkl - Currently Watching', desc: 'TV shows currently watching on Simkl' },
-      { id: 'simkl_plantowatch_movies', group: 'simkl', type: 'movie', title: 'Simkl - Plan to Watch', desc: 'Movies in Simkl Plan to Watch (17 genre filters)' },
-      { id: 'simkl_plantowatch_shows', group: 'simkl', type: 'series', title: 'Simkl - Plan to Watch', desc: 'TV shows in Simkl Plan to Watch (17 genre filters)' },
-      { id: 'simkl_completed_movies', group: 'simkl', type: 'movie', title: 'Simkl - Completed', desc: 'Movies completed on Simkl (17 genre filters)' }
+      { id: 'trakt_playback_series', group: 'trakt', type: 'series', title: 'Trakt - Continue Watching' },
+      { id: 'trakt_playback_movies', group: 'trakt', type: 'movie', title: 'Trakt - Continue Watching' },
+      { id: 'trakt_watchlist_movies', group: 'trakt', type: 'movie', title: 'Trakt - Watchlist' },
+      { id: 'trakt_watchlist_series', group: 'trakt', type: 'series', title: 'Trakt - Watchlist' },
+      { id: 'trakt_history_movies', group: 'trakt', type: 'movie', title: 'Trakt - History' },
+      { id: 'trakt_history_series', group: 'trakt', type: 'series', title: 'Trakt - History' },
+      { id: 'trakt_collection_movies', group: 'trakt', type: 'movie', title: 'Trakt - Collection' },
+      { id: 'trakt_collection_series', group: 'trakt', type: 'series', title: 'Trakt - Collection' },
+      { id: 'simkl_watching_shows', group: 'simkl', type: 'series', title: 'Simkl - Currently Watching' },
+      { id: 'simkl_plantowatch_movies', group: 'simkl', type: 'movie', title: 'Simkl - Plan to Watch' },
+      { id: 'simkl_plantowatch_shows', group: 'simkl', type: 'series', title: 'Simkl - Plan to Watch' },
+      { id: 'simkl_completed_movies', group: 'simkl', type: 'movie', title: 'Simkl - Completed' }
     ];
 
     let currentPassword = '';
@@ -702,105 +1242,54 @@ export default {
     let simklPollInterval = null;
 
     function checkLock() {
-      if (!SERVER_ACCESS_PASSWORD) {
-        document.getElementById('lockSection').style.display = 'none';
-        document.getElementById('mainDashboard').style.display = 'block';
-        return;
-      }
+      if (!SERVER_ACCESS_PASSWORD) return true;
       const urlKey = new URLSearchParams(window.location.search).get('key') || new URLSearchParams(window.location.search).get('pass');
       const savedPass = sessionStorage.getItem('addon_pass') || localStorage.getItem('addon_pass') || (INITIAL_CONFIG && INITIAL_CONFIG.pass);
       if (urlKey === SERVER_ACCESS_PASSWORD || savedPass === SERVER_ACCESS_PASSWORD) {
         currentPassword = SERVER_ACCESS_PASSWORD;
         sessionStorage.setItem('addon_pass', currentPassword);
         localStorage.setItem('addon_pass', currentPassword);
-        document.getElementById('lockSection').style.display = 'none';
-        document.getElementById('mainDashboard').style.display = 'block';
-      } else {
-        document.getElementById('mainDashboard').style.display = 'none';
-        document.getElementById('lockSection').style.display = 'block';
+        return true;
       }
+      return false;
     }
 
-    function unlockDashboard() {
-      const val = document.getElementById('passInput').value.trim();
-      if (val === SERVER_ACCESS_PASSWORD) {
-        currentPassword = val;
-        sessionStorage.setItem('addon_pass', val);
-        localStorage.setItem('addon_pass', val);
-        document.getElementById('lockSection').style.display = 'none';
-        document.getElementById('mainDashboard').style.display = 'block';
-        updateUrls();
-      } else {
-        alert('Invalid access password');
-      }
-    }
-
-    function renderCatalogs() {
-      const traktContainer = document.getElementById('traktCatalogList');
-      const simklContainer = document.getElementById('simklCatalogList');
-      const simklHeader = document.getElementById('simklCatalogHeader');
-
+    function renderCatalogLists() {
+      const traktContainer = document.getElementById('traktCatGroup');
+      const simklContainer = document.getElementById('simklCatGroup');
       traktContainer.innerHTML = '';
       simklContainer.innerHTML = '';
 
-      const isSimklActive = !!simklToken;
-      simklHeader.style.display = isSimklActive ? 'block' : 'none';
-      simklContainer.style.display = isSimklActive ? 'flex' : 'none';
-
       CATALOG_DEFINITIONS.forEach(cat => {
         const isChecked = selectedCatalogs === null ? true : selectedCatalogs.includes(cat.id);
-        const item = document.createElement('div');
-        item.className = 'catalog-item' + (isChecked ? ' checked' : '');
-        item.id = 'cat-wrap-' + cat.id;
+        const label = document.createElement('label');
+        label.className = 'cat-item';
 
         const chk = document.createElement('input');
         chk.type = 'checkbox';
         chk.id = 'chk-' + cat.id;
         chk.checked = isChecked;
-        chk.onchange = (e) => {
-          e.stopPropagation();
-          onCatalogToggle(cat.id, chk.checked);
-        };
+        chk.onchange = () => onCatalogToggle(cat.id, chk.checked);
 
-        const content = document.createElement('div');
-        content.className = 'catalog-content';
+        const details = document.createElement('div');
+        details.className = 'cat-details';
 
-        const row = document.createElement('div');
-        row.className = 'catalog-title-row';
+        const name = document.createElement('span');
+        name.className = 'cat-name';
+        name.innerText = cat.title;
 
-        const title = document.createElement('span');
-        title.className = 'catalog-title';
-        title.innerText = cat.title;
+        const type = document.createElement('span');
+        type.className = 'cat-type';
+        type.innerText = cat.type;
 
-        const badge = document.createElement('span');
-        badge.className = 'catalog-badge';
-        badge.innerText = cat.type;
+        details.appendChild(name);
+        details.appendChild(type);
 
-        row.appendChild(title);
-        row.appendChild(badge);
+        label.appendChild(chk);
+        label.appendChild(details);
 
-        const desc = document.createElement('div');
-        desc.className = 'catalog-desc';
-        desc.innerText = cat.desc;
-
-        content.appendChild(row);
-        content.appendChild(desc);
-
-        item.appendChild(chk);
-        item.appendChild(content);
-
-        item.onclick = (e) => {
-          if (e.target !== chk) {
-            chk.checked = !chk.checked;
-            onCatalogToggle(cat.id, chk.checked);
-          }
-        };
-
-        if (cat.group === 'trakt') {
-          traktContainer.appendChild(item);
-        } else if (cat.group === 'simkl') {
-          simklContainer.appendChild(item);
-        }
+        if (cat.group === 'trakt') traktContainer.appendChild(label);
+        else if (cat.group === 'simkl') simklContainer.appendChild(label);
       });
     }
 
@@ -813,51 +1302,96 @@ export default {
       } else {
         selectedCatalogs = selectedCatalogs.filter(id => id !== catId);
       }
-      const wrap = document.getElementById('cat-wrap-' + catId);
-      if (wrap) {
-        if (checked) wrap.classList.add('checked');
-        else wrap.classList.remove('checked');
-      }
       localStorage.setItem('selected_catalogs', JSON.stringify(selectedCatalogs));
       updateUrls();
     }
 
-    function toggleAllCatalogs(select) {
-      if (select) {
+    function toggleGroupCatalogs(group, select) {
+      if (selectedCatalogs === null) {
         selectedCatalogs = CATALOG_DEFINITIONS.map(c => c.id);
-      } else {
-        selectedCatalogs = [];
       }
-      CATALOG_DEFINITIONS.forEach(c => {
-        const chk = document.getElementById('chk-' + c.id);
+      const groupCats = CATALOG_DEFINITIONS.filter(c => c.group === group);
+      groupCats.forEach(cat => {
+        const chk = document.getElementById('chk-' + cat.id);
         if (chk) chk.checked = select;
-        const wrap = document.getElementById('cat-wrap-' + c.id);
-        if (wrap) {
-          if (select) wrap.classList.add('checked');
-          else wrap.classList.remove('checked');
+        if (select) {
+          if (!selectedCatalogs.includes(cat.id)) selectedCatalogs.push(cat.id);
+        } else {
+          selectedCatalogs = selectedCatalogs.filter(id => id !== cat.id);
         }
       });
       localStorage.setItem('selected_catalogs', JSON.stringify(selectedCatalogs));
       updateUrls();
     }
 
+    function openModal(id) {
+      document.getElementById('modalBackdrop').style.display = 'flex';
+      ['modalSimkl', 'modalTrakt', 'modalStremio', 'modalGeneral'].forEach(mId => {
+        const el = document.getElementById(mId);
+        if (el) el.style.display = 'none';
+      });
+
+      if (id === 'simkl') {
+        document.getElementById('modalSimkl').style.display = 'block';
+        switchTab('simkl', 'catalogs');
+      } else if (id === 'trakt') {
+        document.getElementById('modalTrakt').style.display = 'block';
+        switchTab('trakt', 'catalogs');
+      } else if (id === 'stremio' || id === 'nuvio') {
+        document.getElementById('modalStremio').style.display = 'block';
+      } else if (id === 'general') {
+        document.getElementById('modalGeneral').style.display = 'block';
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('modalBackdrop').style.display = 'none';
+    }
+
+    function handleBackdropClick(e) {
+      if (e.target.id === 'modalBackdrop') {
+        closeModal();
+      }
+    }
+
+    function switchTab(modalName, tabName) {
+      ['catalogs', 'sync', 'creds'].forEach(t => {
+        const btn = document.getElementById('tabBtn-' + modalName + '-' + t);
+        const pane = document.getElementById('pane-' + modalName + '-' + t);
+        if (btn && pane) {
+          if (t === tabName) {
+            btn.classList.add('tab-active');
+            pane.classList.add('pane-active');
+          } else {
+            btn.classList.remove('tab-active');
+            pane.classList.remove('pane-active');
+          }
+        }
+      });
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+      t.style.display = 'block';
+      setTimeout(() => { t.style.display = 'none'; }, 2000);
+    }
+
+    function saveAndClose() {
+      closeModal();
+      showToast('Settings Saved!');
+      updateUrls();
+    }
+
     async function startTrakt() {
-      const btn = document.getElementById('btnTrakt');
-      btn.disabled = true;
+      const btn = document.getElementById('btnStartTrakt');
       btn.innerText = 'Requesting code...';
+      btn.disabled = true;
 
       const clientId = activeTraktClientId || SERVER_TRAKT_CLIENT_ID;
-      if (!clientId) {
-        alert('TRAKT_CLIENT_ID is not configured in Cloudflare Environment Variables.');
-        btn.disabled = false;
-        btn.innerText = 'Tap to Connect Trakt';
-        return;
-      }
-
       try {
         let data = null;
-
-        // Method 1: Direct browser fetch to Trakt API
+        let directAttempted = false;
         try {
           const directRes = await fetch('https://api.trakt.tv/oauth/device/code', {
             method: 'POST',
@@ -869,50 +1403,38 @@ export default {
             },
             body: JSON.stringify({ client_id: clientId })
           });
-          if (directRes.ok) {
-            data = await directRes.json();
-          }
-        } catch (e) {
-          console.warn('Direct Trakt connection failed, attempting worker proxy fallback:', e);
-        }
+          directAttempted = true;
+          if (directRes.ok) data = await directRes.json();
+        } catch (_) {}
 
-        // Method 2: Worker Proxy fallback
-        if (!data) {
+        if (!data && !directAttempted) {
           const res = await fetch('/api/auth/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ clientId, pass: currentPassword })
           });
-          const text = await res.text();
-          try {
-            data = JSON.parse(text);
-          } catch (_) {
-            throw new Error('Server returned non-JSON response: ' + text.slice(0, 150));
-          }
-          if (!res.ok) throw new Error(data.error || 'Failed to request Trakt code');
+          if (res.ok) data = await res.json();
         }
 
-        if (!data || !data.user_code) {
-          throw new Error('Failed to acquire Trakt activation code');
-        }
+        if (!data || !data.user_code) throw new Error('Could not get Trakt code');
 
         document.getElementById('traktUserCode').innerText = data.user_code;
         document.getElementById('traktActivateLink').href = data.verification_url || 'https://auth.trakt.tv/activate';
-        document.getElementById('traktInitial').style.display = 'none';
+        document.getElementById('btnStartTrakt').style.display = 'none';
         document.getElementById('traktCodeBox').style.display = 'block';
 
         pollTraktToken(data.device_code, data.interval || 6, clientId);
-      } catch (err) {
-        alert(err.message);
+      } catch (e) {
+        alert(e.message);
         btn.disabled = false;
         btn.innerText = 'Tap to Connect Trakt';
       }
     }
 
-    function copyCode() {
+    function copyTraktCode() {
       const code = document.getElementById('traktUserCode').innerText;
       navigator.clipboard.writeText(code);
-      alert('Code ' + code + ' copied to clipboard!');
+      showToast('Code copied: ' + code);
     }
 
     function pollTraktToken(deviceCode, interval, clientId) {
@@ -920,10 +1442,7 @@ export default {
       pollInterval = setInterval(async () => {
         try {
           let tokenData = null;
-
           let directAttempted = false;
-
-          // Method 1: Direct browser polling
           try {
             const directRes = await fetch('https://api.trakt.tv/oauth/device/token', {
               method: 'POST',
@@ -933,34 +1452,23 @@ export default {
                 'trakt-api-version': '2',
                 'trakt-api-key': clientId
               },
-              body: JSON.stringify({
-                code: deviceCode,
-                client_id: clientId
-              })
+              body: JSON.stringify({ code: deviceCode, client_id: clientId })
             });
             directAttempted = true;
-            if (directRes.ok) {
-              tokenData = await directRes.json();
-            }
+            if (directRes.ok) tokenData = await directRes.json();
           } catch (_) {}
 
-          // Method 2: Worker proxy polling fallback only if direct network failed
           if (!tokenData && !directAttempted) {
             const res = await fetch('/api/auth/token', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ deviceCode, clientId, pass: currentPassword })
             });
-            if (res.ok) {
-              const resData = await res.json();
-              if (resData.access_token) tokenData = resData;
-            }
+            if (res.ok) tokenData = await res.json();
           }
 
           if (tokenData && tokenData.access_token) {
             clearInterval(pollInterval);
-
-            // Fetch Trakt username directly
             let username = '';
             try {
               const uRes = await fetch('https://api.trakt.tv/users/me', {
@@ -972,35 +1480,19 @@ export default {
                 }
               });
               if (uRes.ok) {
-                const uData = await uRes.json();
-                username = uData.username || '';
+                const u = await uRes.json();
+                username = u.username || '';
               }
             } catch (_) {}
 
-            // Safeguard: Allowed Users Check
-            if (SERVER_ALLOWED_USERS && SERVER_ALLOWED_USERS.length > 0 && username) {
-              if (!SERVER_ALLOWED_USERS.includes(username.toLowerCase())) {
-                alert('Access Denied: Account @' + username + ' is not on the allowed list for this private instance.');
-                return;
-              }
-            }
-
             traktToken = tokenData.access_token;
             traktUser = username;
-            activeTraktClientId = clientId;
-
             localStorage.setItem('trakt_token', traktToken);
             localStorage.setItem('trakt_user', traktUser);
-            localStorage.setItem('trakt_client_id', activeTraktClientId);
 
-            document.getElementById('traktCodeBox').style.display = 'none';
-            document.getElementById('traktInitial').style.display = 'none';
-            document.getElementById('traktBadge').innerText = 'Connected';
-            document.getElementById('traktBadge').style.color = '#34d399';
-            document.getElementById('traktUser').innerText = username ? '@' + username : 'Active';
-            document.getElementById('traktConnected').style.display = 'flex';
-
+            renderCredentialsState();
             updateUrls();
+            showToast('Trakt Connected!');
           }
         } catch (_) {}
       }, (interval || 6) * 1000);
@@ -1011,24 +1503,20 @@ export default {
       traktUser = '';
       localStorage.removeItem('trakt_token');
       localStorage.removeItem('trakt_user');
-      document.getElementById('traktConnected').style.display = 'none';
-      document.getElementById('traktBadge').innerText = 'Not Connected';
-      document.getElementById('traktBadge').style.color = '#94a3b8';
-      document.getElementById('traktInitial').style.display = 'block';
+      renderCredentialsState();
       updateUrls();
+      showToast('Trakt Disconnected');
     }
 
     async function startSimkl() {
-      const btn = document.getElementById('btnSimkl');
-      btn.disabled = true;
+      const btn = document.getElementById('btnStartSimkl');
       btn.innerText = 'Requesting Simkl PIN...';
+      btn.disabled = true;
 
       const clientId = activeSimklClientId || SERVER_SIMKL_CLIENT_ID;
-
       try {
         let data = null;
-
-        // Method 1: Direct browser fetch to Simkl OAuth2 Device endpoint
+        let directAttempted = false;
         if (clientId) {
           try {
             const directRes = await fetch('https://api.simkl.com/oauth2/device', {
@@ -1036,48 +1524,33 @@ export default {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ client_id: clientId })
             });
-            if (directRes.ok) {
-              data = await directRes.json();
-            }
+            directAttempted = true;
+            if (directRes.ok) data = await directRes.json();
           } catch (_) {}
         }
 
-        // Method 2: Worker proxy fallback
-        if (!data) {
+        if (!data && !directAttempted) {
           const res = await fetch('/api/simkl/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ clientId, pass: currentPassword })
           });
-          const text = await res.text();
-          try {
-            data = JSON.parse(text);
-          } catch (_) {
-            throw new Error('Server returned non-JSON response: ' + text.slice(0, 150));
-          }
-          if (!res.ok) {
-            alert(data.error || 'Set SIMKL_CLIENT_ID in Cloudflare or paste token below');
-            btn.disabled = false;
-            btn.innerText = 'Tap to Connect Simkl';
-            return;
-          }
+          if (res.ok) data = await res.json();
         }
 
-        if (!data || !data.user_code || !data.device_code) {
-          throw new Error('Failed to acquire Simkl PIN');
-        }
+        if (!data || !data.user_code || !data.device_code) throw new Error('Could not get Simkl PIN');
 
         document.getElementById('simklUserCode').innerText = data.user_code;
-        const activateLink = document.getElementById('simklActivateLink');
-        if (activateLink) {
-          activateLink.href = data.verification_uri_complete || data.verification_uri || 'https://simkl.com/pin';
+        const actLink = document.getElementById('simklActivateLink');
+        if (actLink) {
+          actLink.href = data.verification_uri_complete || data.verification_uri || 'https://simkl.com/pin';
         }
-        document.getElementById('simklBtnWrap').style.display = 'none';
+        document.getElementById('btnStartSimkl').style.display = 'none';
         document.getElementById('simklCodeBox').style.display = 'block';
 
         pollSimklToken(data.device_code, data.interval || 5, clientId);
-      } catch (err) {
-        alert(err.message);
+      } catch (e) {
+        alert(e.message);
         btn.disabled = false;
         btn.innerText = 'Tap to Connect Simkl';
       }
@@ -1086,7 +1559,7 @@ export default {
     function copySimklCode() {
       const code = document.getElementById('simklUserCode').innerText;
       navigator.clipboard.writeText(code);
-      alert('Code ' + code + ' copied to clipboard!');
+      showToast('Simkl Code copied: ' + code);
     }
 
     function pollSimklToken(deviceCode, interval, clientId) {
@@ -1094,10 +1567,7 @@ export default {
       simklPollInterval = setInterval(async () => {
         try {
           let token = null;
-
           let directAttempted = false;
-
-          // Method 1: Direct Simkl OAuth2 Token Polling from Browser
           if (clientId && deviceCode) {
             try {
               const directRes = await fetch('https://api.simkl.com/oauth2/token', {
@@ -1112,14 +1582,11 @@ export default {
               directAttempted = true;
               if (directRes.ok) {
                 const directData = await directRes.json();
-                if (directData.access_token) {
-                  token = directData.access_token;
-                }
+                if (directData.access_token) token = directData.access_token;
               }
             } catch (_) {}
           }
 
-          // Method 2: Worker proxy fallback only if direct network failed
           if (!token && !directAttempted) {
             const res = await fetch('/api/simkl/token', {
               method: 'POST',
@@ -1135,20 +1602,10 @@ export default {
           if (token) {
             clearInterval(simklPollInterval);
             simklToken = token;
-            activeSimklClientId = clientId;
-
             localStorage.setItem('simkl_token', simklToken);
-            localStorage.setItem('simkl_client_id', activeSimklClientId);
-
-            document.getElementById('simklTokenInput').value = simklToken;
-            document.getElementById('simklCodeBox').style.display = 'none';
-            document.getElementById('simklBtnWrap').style.display = 'none';
-            document.getElementById('simklBadge').innerText = 'Connected';
-            document.getElementById('simklBadge').style.color = '#34d399';
-            document.getElementById('simklConnected').style.display = 'flex';
-
-            renderCatalogs();
+            renderCredentialsState();
             updateUrls();
+            showToast('Simkl Connected!');
           }
         } catch (_) {}
       }, (interval || 5) * 1000);
@@ -1157,52 +1614,56 @@ export default {
     function disconnectSimkl() {
       simklToken = '';
       localStorage.removeItem('simkl_token');
-      document.getElementById('simklConnected').style.display = 'none';
-      document.getElementById('simklBadge').innerText = 'Optional';
-      document.getElementById('simklBadge').style.color = '#94a3b8';
-      document.getElementById('simklBtnWrap').style.display = 'block';
-      document.getElementById('simklTokenInput').value = '';
-      renderCatalogs();
+      renderCredentialsState();
       updateUrls();
+      showToast('Simkl Disconnected');
     }
 
-    function onSimklTokenManualInput() {
+    function onSimklTokenInput() {
       const val = document.getElementById('simklTokenInput').value.trim();
       simklToken = val;
-      if (val) {
-        localStorage.setItem('simkl_token', val);
-        document.getElementById('simklBadge').innerText = 'Connected';
-        document.getElementById('simklBadge').style.color = '#34d399';
-      } else {
-        localStorage.removeItem('simkl_token');
-        document.getElementById('simklBadge').innerText = 'Optional';
-        document.getElementById('simklBadge').style.color = '#94a3b8';
-      }
-      renderCatalogs();
+      if (val) localStorage.setItem('simkl_token', val);
+      else localStorage.removeItem('simkl_token');
+      renderCredentialsState();
       updateUrls();
     }
 
-    function copyManifestUrl() {
-      const url = document.getElementById('manifestUrl').innerText;
+    function renderCredentialsState() {
+      // Trakt
+      const traktDot = document.getElementById('traktStatusDot');
+      if (traktToken) {
+        if (traktDot) traktDot.classList.add('connected');
+        document.getElementById('traktCredsConnected').style.display = 'block';
+        document.getElementById('traktCredsDisconnected').style.display = 'none';
+        document.getElementById('traktUserName').innerText = traktUser ? '@' + traktUser : 'Active';
+      } else {
+        if (traktDot) traktDot.classList.remove('connected');
+        document.getElementById('traktCredsConnected').style.display = 'none';
+        document.getElementById('traktCredsDisconnected').style.display = 'block';
+      }
+
+      // Simkl
+      const simklDot = document.getElementById('simklStatusDot');
+      if (simklToken) {
+        if (simklDot) simklDot.classList.add('connected');
+        document.getElementById('simklCredsConnected').style.display = 'block';
+        document.getElementById('simklCredsDisconnected').style.display = 'none';
+      } else {
+        if (simklDot) simklDot.classList.remove('connected');
+        document.getElementById('simklCredsConnected').style.display = 'none';
+        document.getElementById('simklCredsDisconnected').style.display = 'block';
+      }
+    }
+
+    function copyManifest() {
+      const url = document.getElementById('stremioManifestDisplay').innerText;
       navigator.clipboard.writeText(url);
       const btn = document.getElementById('btnCopyManifest');
-      const orig = btn.innerText;
       btn.innerText = '✓ Copied to Clipboard!';
-      btn.style.borderColor = '#10b981';
-      btn.style.color = '#34d399';
-      setTimeout(() => {
-        btn.innerText = orig;
-        btn.style.borderColor = '';
-        btn.style.color = '';
-      }, 2000);
+      setTimeout(() => { btn.innerText = '📋 Copy Manifest URL'; }, 2000);
     }
 
     function updateUrls() {
-      if (!traktToken && !simklToken) {
-        document.getElementById('installSection').style.display = 'none';
-        return;
-      }
-
       const activeCatalogs = selectedCatalogs === null ? CATALOG_DEFINITIONS.map(c => c.id) : selectedCatalogs;
 
       const configObj = {
@@ -1220,65 +1681,37 @@ export default {
       const manifest = origin + '/' + enc + '/manifest.json';
       const stremio = manifest.replace('https://', 'stremio://').replace('http://', 'stremio://');
 
-      document.getElementById('manifestUrl').innerText = manifest;
-      document.getElementById('stremioLink').href = stremio;
-      document.getElementById('installSection').style.display = 'block';
+      document.getElementById('stremioManifestDisplay').innerText = manifest;
+      document.getElementById('stremioInstallBtn').href = stremio;
     }
 
     function init() {
       checkLock();
 
-      // 1. Check if URL provided existing config
       if (INITIAL_CONFIG) {
         if (INITIAL_CONFIG.traktToken) {
           localStorage.setItem('trakt_token', INITIAL_CONFIG.traktToken);
           if (INITIAL_CONFIG.traktUser) localStorage.setItem('trakt_user', INITIAL_CONFIG.traktUser);
-          if (INITIAL_CONFIG.traktClientId) localStorage.setItem('trakt_client_id', INITIAL_CONFIG.traktClientId);
         }
         if (INITIAL_CONFIG.simklToken) {
           localStorage.setItem('simkl_token', INITIAL_CONFIG.simklToken);
-          if (INITIAL_CONFIG.simklClientId) localStorage.setItem('simkl_client_id', INITIAL_CONFIG.simklClientId);
         }
         if (Array.isArray(INITIAL_CONFIG.catalogs)) {
           localStorage.setItem('selected_catalogs', JSON.stringify(INITIAL_CONFIG.catalogs));
         }
       }
 
-      // 2. Load from localStorage
       traktToken = localStorage.getItem('trakt_token') || '';
       traktUser = localStorage.getItem('trakt_user') || '';
-      activeTraktClientId = localStorage.getItem('trakt_client_id') || SERVER_TRAKT_CLIENT_ID;
       simklToken = localStorage.getItem('simkl_token') || '';
-      activeSimklClientId = localStorage.getItem('simkl_client_id') || SERVER_SIMKL_CLIENT_ID;
 
       const savedCats = localStorage.getItem('selected_catalogs');
       if (savedCats) {
-        try {
-          selectedCatalogs = JSON.parse(savedCats);
-        } catch (_) {}
+        try { selectedCatalogs = JSON.parse(savedCats); } catch (_) {}
       }
 
-      // Render Trakt UI
-      if (traktToken) {
-        document.getElementById('traktInitial').style.display = 'none';
-        document.getElementById('traktCodeBox').style.display = 'none';
-        document.getElementById('traktConnected').style.display = 'flex';
-        document.getElementById('traktBadge').innerText = 'Connected';
-        document.getElementById('traktBadge').style.color = '#34d399';
-        document.getElementById('traktUser').innerText = traktUser ? '@' + traktUser : 'Active';
-      }
-
-      // Render Simkl UI
-      if (simklToken) {
-        document.getElementById('simklBtnWrap').style.display = 'none';
-        document.getElementById('simklCodeBox').style.display = 'none';
-        document.getElementById('simklConnected').style.display = 'flex';
-        document.getElementById('simklBadge').innerText = 'Connected';
-        document.getElementById('simklBadge').style.color = '#34d399';
-        document.getElementById('simklTokenInput').value = simklToken;
-      }
-
-      renderCatalogs();
+      renderCatalogLists();
+      renderCredentialsState();
       updateUrls();
     }
 
