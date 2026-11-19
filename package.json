@@ -1,6 +1,6 @@
 {
   "name": "stremio-trakt-sync",
-  "version": "2.5.4",
+  "version": "2.6.0",
   "description": "Serverless Stremio & Nuvio Trakt Multi-Device Sync Addon on Cloudflare Workers",
   "main": "worker.js",
   "type": "module",
