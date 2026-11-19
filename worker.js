@@ -215,9 +215,13 @@ function jsonResponse(data, status = 200) {
 function parseConfig(segment) {
   if (!segment) return null;
   try {
-    const raw = atob(segment.replace(/-/g, '+').replace(/_/g, '/'));
+    let clean = segment.replace(/-/g, '+').replace(/_/g, '/');
+    while (clean.length % 4 !== 0) {
+      clean += '=';
+    }
+    const raw = atob(clean);
     const parsed = JSON.parse(raw);
-    if (parsed.traktToken || parsed.token || parsed.simklToken || parsed.pass) return parsed;
+    if (parsed && (parsed.traktToken || parsed.token || parsed.simklToken || parsed.pass)) return parsed;
   } catch (_) {}
   return null;
 }
@@ -2242,7 +2246,12 @@ export default {
       }
 
       // Manifest (matches /:config/manifest.json OR /manifest.json OR /:config for direct addon installs)
-      if ((routeParts.length === 1 && routeParts[0] === 'manifest.json') || (potentialConfig && routeParts.length === 0) || pathname === '/manifest.json') {
+      const isManifest =
+        pathname === '/manifest.json' ||
+        (parts.length > 0 && parts[parts.length - 1] === 'manifest.json') ||
+        (potentialConfig && routeParts.length === 0);
+
+      if (isManifest) {
         return jsonResponse(buildManifest(config));
       }
 
