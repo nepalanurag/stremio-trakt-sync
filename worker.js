@@ -5,9 +5,11 @@ const DEFAULT_TRAKT_CLIENT_ID = '';
 const TRAKT_API_URL = 'https://api.trakt.tv';
 const SIMKL_API_URL = 'https://api.simkl.com';
 
-const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const USER_AGENT = 'MultiSync-Stremio/2.6.5 (Cloudflare Worker; +https://github.com/nepalanurag/stremio-trakt-sync)';
 
 const CONFIG_FILE = 'config.json';
+
+let traktRateLimitedUntil = 0;
 
 const syncDebounceCache = new Map();
 function shouldSync(key) {
@@ -171,7 +173,7 @@ function buildManifest(config) {
 
   return {
     id: 'org.multisync.stremio',
-    version: '2.6.4',
+    version: '2.6.5',
     name: 'MultiSync (Trakt & Simkl)',
     description: isConfigured
       ? 'Syncs Trakt and Simkl Watchlists, Continue Watching, and History to Stremio and Nuvio across all devices without account logouts.'
@@ -471,7 +473,7 @@ async function syncToSimkl(media, token, clientId) {
 }
 
 async function syncToTrakt(media, token, clientId) {
-  if (!token || !clientId || !media) return;
+  if (!token || !clientId || !media || Date.now() < traktRateLimitedUntil) return;
   const ids = {};
   if (media.imdbId && media.imdbId.startsWith('tt')) ids.imdb = media.imdbId;
   if (media.traktId) ids.trakt = parseInt(media.traktId, 10) || media.traktId;
@@ -533,7 +535,7 @@ async function syncToTrakt(media, token, clientId) {
 }
 
 async function scrobbleTrakt(media, action, progress, token, clientId) {
-  if (!token || !clientId || !media) return;
+  if (!token || !clientId || !media || Date.now() < traktRateLimitedUntil) return;
   const ids = {};
   if (media.imdbId && media.imdbId.startsWith('tt')) ids.imdb = media.imdbId;
   if (media.traktId) ids.trakt = parseInt(media.traktId, 10) || media.traktId;
@@ -762,6 +764,14 @@ async function handleCatalog(catalogId, type, extraSegment, config, defaultClien
   else if (catalogId === 'trakt_collection_series') endpoint = `/sync/collection/shows?extended=full&page=${page}&limit=20`;
   if (!endpoint) return [];
 
+  if (Date.now() < traktRateLimitedUntil) {
+    const remaining = Math.ceil((traktRateLimitedUntil - Date.now()) / 1000);
+    console.warn(`[Trakt API] Rate limit cooldown active (${remaining}s remaining), skipping call: ${endpoint}`);
+    const empty = [];
+    empty.traktStatus = 'rate_limited_cooldown';
+    return empty;
+  }
+
   console.log(`[Trakt Request] ${endpoint}`);
   const res = await fetch(`${TRAKT_API_URL}${endpoint}`, {
     headers: {
@@ -775,6 +785,16 @@ async function handleCatalog(catalogId, type, extraSegment, config, defaultClien
   });
 
   console.log(`[Trakt Response] ${endpoint} -> HTTP ${res.status}`);
+
+  if (res.status === 429) {
+    const retryHeader = parseInt(res.headers.get('retry-after') || '60', 10);
+    const cooldown = Math.max(retryHeader, 60);
+    traktRateLimitedUntil = Date.now() + cooldown * 1000;
+    console.error(`[Trakt 429] Rate limit hit. Backing off for ${cooldown} seconds.`);
+    const empty = [];
+    empty.traktStatus = 'http_429';
+    return empty;
+  }
 
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
@@ -2111,6 +2131,11 @@ export default {
 
       // Trakt Device Code: Start
       if (pathname === '/api/auth/start' && request.method === 'POST') {
+        if (Date.now() < traktRateLimitedUntil) {
+          const waitSec = Math.ceil((traktRateLimitedUntil - Date.now()) / 1000);
+          return jsonResponse({ error: `Trakt API rate limited. Please wait ${waitSec}s.` }, 429);
+        }
+
         let reqClientId = traktClientId;
         try {
           const body = await request.json();
@@ -2126,12 +2151,15 @@ export default {
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
-              'User-Agent': 'StremioTraktSync/2.3.0',
+              'User-Agent': USER_AGENT,
               'trakt-api-version': '2',
               'trakt-api-key': reqClientId
             },
             body: JSON.stringify({ client_id: reqClientId })
           });
+          if (res.status === 429) {
+            traktRateLimitedUntil = Date.now() + 60 * 1000;
+          }
           const text = await res.text();
           try {
             const data = JSON.parse(text);
@@ -2159,13 +2187,16 @@ export default {
         if (!reqClientId) {
           return jsonResponse({ error: 'TRAKT_CLIENT_ID environment variable is missing' }, 400);
         }
+        if (Date.now() < traktRateLimitedUntil) {
+          return jsonResponse({ status: 'rate_limited' }, 429);
+        }
         try {
           const res = await fetch(`${TRAKT_API_URL}/oauth/device/token`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
-              'User-Agent': 'StremioTraktSync/2.3.0',
+              'User-Agent': USER_AGENT,
               'trakt-api-version': '2',
               'trakt-api-key': reqClientId
             },
@@ -2174,6 +2205,11 @@ export default {
               client_id: reqClientId
             })
           });
+
+          if (res.status === 429) {
+            traktRateLimitedUntil = Date.now() + 60 * 1000;
+            return jsonResponse({ status: 'rate_limited' }, 429);
+          }
 
           if (!res.ok) {
             return jsonResponse({ status: 'pending' }, res.status);
