@@ -143,6 +143,16 @@ const SIMKL_CATALOGS = [
       { name: 'skip', isRequired: false }
     ],
     extraSupported: ['genre', 'skip']
+  },
+  {
+    type: 'series',
+    id: 'simkl_completed_shows',
+    name: 'Simkl - Completed',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ],
+    extraSupported: ['genre', 'skip']
   }
 ];
 
@@ -161,7 +171,7 @@ function buildManifest(config) {
 
   return {
     id: 'org.multisync.stremio',
-    version: '2.6.2',
+    version: '2.6.3',
     name: 'MultiSync (Trakt & Simkl)',
     description: isConfigured
       ? 'Syncs Trakt and Simkl Watchlists, Continue Watching, and History to Stremio and Nuvio across all devices without account logouts.'
@@ -702,6 +712,7 @@ async function handleCatalog(catalogId, type, extraSegment, config, defaultClien
     else if (catalogId === 'simkl_plantowatch_movies') simklEndpoint = '/sync/all-items/movies/plantowatch';
     else if (catalogId === 'simkl_plantowatch_shows') simklEndpoint = '/sync/all-items/shows/plantowatch';
     else if (catalogId === 'simkl_completed_movies') simklEndpoint = '/sync/all-items/movies/completed';
+    else if (catalogId === 'simkl_completed_shows') simklEndpoint = '/sync/all-items/shows/completed';
     if (!simklEndpoint) return [];
 
     const simklHeaders = {
@@ -757,7 +768,8 @@ async function handleCatalog(catalogId, type, extraSegment, config, defaultClien
     }
   });
   if (!res.ok) return [];
-  const data = await res.json();
+  const data = await res.json().catch(() => null);
+  if (!Array.isArray(data)) return [];
 
   let items = [];
   if (catalogId === 'trakt_playback_series' || catalogId === 'trakt_history_series') {
@@ -1574,7 +1586,8 @@ export default {
       { id: 'simkl_watching_shows', group: 'simkl', type: 'series', title: 'Simkl - Currently Watching' },
       { id: 'simkl_plantowatch_movies', group: 'simkl', type: 'movie', title: 'Simkl - Plan to Watch' },
       { id: 'simkl_plantowatch_shows', group: 'simkl', type: 'series', title: 'Simkl - Plan to Watch' },
-      { id: 'simkl_completed_movies', group: 'simkl', type: 'movie', title: 'Simkl - Completed' }
+      { id: 'simkl_completed_movies', group: 'simkl', type: 'movie', title: 'Simkl - Completed' },
+      { id: 'simkl_completed_shows', group: 'simkl', type: 'series', title: 'Simkl - Completed' }
     ];
 
     let currentPassword = '';
