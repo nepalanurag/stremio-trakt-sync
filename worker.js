@@ -5,7 +5,7 @@ const DEFAULT_TRAKT_CLIENT_ID = '';
 const TRAKT_API_URL = 'https://api.trakt.tv';
 const SIMKL_API_URL = 'https://api.simkl.com';
 
-const USER_AGENT = 'MultiSync-Stremio/2.6.5 (Cloudflare Worker; +https://github.com/nepalanurag/stremio-trakt-sync)';
+const USER_AGENT = 'MultiSync-Stremio/2.6.6 (Cloudflare Worker; +https://github.com/nepalanurag/stremio-trakt-sync)';
 
 const CONFIG_FILE = 'config.json';
 
@@ -155,6 +155,33 @@ const SIMKL_CATALOGS = [
       { name: 'skip', isRequired: false }
     ],
     extraSupported: ['genre', 'skip']
+  },
+  {
+    type: 'series',
+    id: 'simkl_watching_anime',
+    name: 'Simkl - Watching (Anime)',
+    extra: [{ name: 'skip', isRequired: false }],
+    extraSupported: ['skip']
+  },
+  {
+    type: 'series',
+    id: 'simkl_plantowatch_anime',
+    name: 'Simkl - Plan to Watch (Anime)',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ],
+    extraSupported: ['genre', 'skip']
+  },
+  {
+    type: 'series',
+    id: 'simkl_completed_anime',
+    name: 'Simkl - Completed (Anime)',
+    extra: [
+      { name: 'genre', isRequired: false, options: GENRE_OPTIONS },
+      { name: 'skip', isRequired: false }
+    ],
+    extraSupported: ['genre', 'skip']
   }
 ];
 
@@ -173,7 +200,7 @@ function buildManifest(config) {
 
   return {
     id: 'org.multisync.stremio',
-    version: '2.6.5',
+    version: '2.6.6',
     name: 'MultiSync (Trakt & Simkl)',
     description: isConfigured
       ? 'Syncs Trakt and Simkl Watchlists, Continue Watching, and History to Stremio and Nuvio across all devices without account logouts.'
@@ -715,6 +742,9 @@ async function handleCatalog(catalogId, type, extraSegment, config, defaultClien
     else if (catalogId === 'simkl_plantowatch_shows') simklEndpoint = '/sync/all-items/shows/plantowatch';
     else if (catalogId === 'simkl_completed_movies') simklEndpoint = '/sync/all-items/movies/completed';
     else if (catalogId === 'simkl_completed_shows') simklEndpoint = '/sync/all-items/shows/completed';
+    else if (catalogId === 'simkl_watching_anime') simklEndpoint = '/sync/all-items/anime/watching';
+    else if (catalogId === 'simkl_plantowatch_anime') simklEndpoint = '/sync/all-items/anime/plantowatch';
+    else if (catalogId === 'simkl_completed_anime') simklEndpoint = '/sync/all-items/anime/completed';
     if (!simklEndpoint) return [];
 
     const simklHeaders = {
@@ -754,14 +784,14 @@ async function handleCatalog(catalogId, type, extraSegment, config, defaultClien
   }
 
   let endpoint = '';
-  if (catalogId === 'trakt_playback_movies') endpoint = '/sync/playback/movies?extended=full';
-  else if (catalogId === 'trakt_playback_series') endpoint = '/sync/playback/episodes?extended=full';
-  else if (catalogId === 'trakt_watchlist_movies') endpoint = `/sync/watchlist/movies?extended=full&page=${page}&limit=20`;
-  else if (catalogId === 'trakt_watchlist_series') endpoint = `/sync/watchlist/shows?extended=full&page=${page}&limit=20`;
-  else if (catalogId === 'trakt_history_movies') endpoint = `/sync/history/movies?extended=full&page=${page}&limit=50`;
-  else if (catalogId === 'trakt_history_series') endpoint = `/sync/history/episodes?extended=full&page=${page}&limit=50`;
-  else if (catalogId === 'trakt_collection_movies') endpoint = `/sync/collection/movies?extended=full&page=${page}&limit=20`;
-  else if (catalogId === 'trakt_collection_series') endpoint = `/sync/collection/shows?extended=full&page=${page}&limit=20`;
+  if (catalogId === 'trakt_playback_movies') endpoint = '/sync/playback/movies';
+  else if (catalogId === 'trakt_playback_series') endpoint = '/sync/playback/episodes';
+  else if (catalogId === 'trakt_watchlist_movies') endpoint = `/sync/watchlist/movies?page=${page}&limit=25`;
+  else if (catalogId === 'trakt_watchlist_series') endpoint = `/sync/watchlist/shows?page=${page}&limit=25`;
+  else if (catalogId === 'trakt_history_movies') endpoint = `/sync/history/movies?page=${page}&limit=25`;
+  else if (catalogId === 'trakt_history_series') endpoint = `/sync/history/episodes?page=${page}&limit=25`;
+  else if (catalogId === 'trakt_collection_movies') endpoint = `/sync/collection/movies?page=${page}&limit=25`;
+  else if (catalogId === 'trakt_collection_series') endpoint = `/sync/collection/shows?page=${page}&limit=25`;
   if (!endpoint) return [];
 
   if (Date.now() < traktRateLimitedUntil) {
@@ -1534,7 +1564,7 @@ export default {
       <!-- 2. Configuration Settings (Tabs) -->
       <div class="panel">
         <div class="tabs-nav">
-          <button class="tab-pill active" id="tabNavCatalogs" onclick="showTab('catalogs')">Catalogs (12 Rows)</button>
+          <button class="tab-pill active" id="tabNavCatalogs" onclick="showTab('catalogs')">Catalogs (16 Rows)</button>
           <button class="tab-pill" id="tabNavSync" onclick="showTab('sync')">Playback & Live Scrobbler</button>
         </div>
 
@@ -1556,7 +1586,7 @@ export default {
 
           <div id="simklGroupHeader" class="catalog-group-title" style="margin-top:1.25rem; display:none;">
             <span>Simkl Rows</span>
-            <span style="font-size:0.7rem; color:var(--text-dim);">4 Rows Available</span>
+            <span style="font-size:0.7rem; color:var(--text-dim);">8 Rows Available</span>
           </div>
           <div class="cat-list" id="simklCatList" style="display:none;"></div>
         </div>
@@ -1627,7 +1657,10 @@ export default {
       { id: 'simkl_plantowatch_movies', group: 'simkl', type: 'movie', title: 'Simkl - Plan to Watch' },
       { id: 'simkl_plantowatch_shows', group: 'simkl', type: 'series', title: 'Simkl - Plan to Watch' },
       { id: 'simkl_completed_movies', group: 'simkl', type: 'movie', title: 'Simkl - Completed' },
-      { id: 'simkl_completed_shows', group: 'simkl', type: 'series', title: 'Simkl - Completed' }
+      { id: 'simkl_completed_shows', group: 'simkl', type: 'series', title: 'Simkl - Completed' },
+      { id: 'simkl_watching_anime', group: 'simkl', type: 'series', title: 'Simkl - Watching (Anime)' },
+      { id: 'simkl_plantowatch_anime', group: 'simkl', type: 'series', title: 'Simkl - Plan to Watch (Anime)' },
+      { id: 'simkl_completed_anime', group: 'simkl', type: 'series', title: 'Simkl - Completed (Anime)' }
     ];
 
     let currentPassword = '';
@@ -2159,13 +2192,17 @@ export default {
           });
           if (res.status === 429) {
             traktRateLimitedUntil = Date.now() + 60 * 1000;
+            return jsonResponse({
+              error: 'Trakt API rate limited. Please wait 60 seconds.',
+              rate_limited: true
+            }, 429);
           }
           const text = await res.text();
           try {
             const data = JSON.parse(text);
             return jsonResponse(data, res.status);
           } catch (_) {
-            return jsonResponse({ error: `Trakt returned non-JSON (${res.status}): ${text.slice(0, 150)}` }, 502);
+            return jsonResponse({ error: `Trakt returned non-JSON (${res.status}): ${text.slice(0, 150)}` }, res.status >= 400 ? res.status : 502);
           }
         } catch (err) {
           return jsonResponse({ error: `Failed to contact Trakt: ${err.message}` }, 500);
@@ -2495,6 +2532,10 @@ export default {
 
         let cached = await cache.match(cacheKey);
         if (cached) {
+          const traktStatus = cached.headers.get('X-Trakt-Status');
+          if (traktStatus === 'http_429' || traktStatus === 'rate_limited_cooldown') {
+            return cached;
+          }
           try {
             const cachedClone = cached.clone();
             const cachedData = await cachedClone.json();
@@ -2513,11 +2554,16 @@ export default {
         const metas = await handleCatalog(catalogId, type, extraSegment, config, traktClientId, simklClientId);
         
         const hasItems = Array.isArray(metas) && metas.length > 0;
-        const cacheControl = hasItems
-          ? 'public, max-age=300, stale-while-revalidate=600'
-          : 'no-cache, no-store, must-revalidate';
+        const isRateLimited = metas && (metas.traktStatus === 'http_429' || metas.traktStatus === 'rate_limited_cooldown');
 
-        console.log(`[Catalog Result] ${catalogId} (${type}) -> ${metas.length} items (traktStatus: ${metas.traktStatus || 'n/a'})`);
+        let cacheControl = 'no-cache, no-store, must-revalidate';
+        if (hasItems) {
+          cacheControl = 'public, max-age=900, stale-while-revalidate=3600';
+        } else if (isRateLimited) {
+          cacheControl = 'public, max-age=60, s-maxage=60';
+        }
+
+        console.log(`[Catalog Result] ${catalogId} (${type}) -> ${metas.length} items (traktStatus: ${metas.traktStatus || 'ok'})`);
 
         const headers = {
           ...CORS_HEADERS,
@@ -2532,7 +2578,7 @@ export default {
           headers
         });
 
-        if (hasItems && ctx && ctx.waitUntil) {
+        if ((hasItems || isRateLimited) && ctx && ctx.waitUntil) {
           ctx.waitUntil(cache.put(cacheKey, response.clone()));
         }
 
