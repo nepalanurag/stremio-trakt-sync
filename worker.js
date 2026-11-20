@@ -171,7 +171,7 @@ function buildManifest(config) {
 
   return {
     id: 'org.multisync.stremio',
-    version: '2.6.3',
+    version: '2.6.4',
     name: 'MultiSync (Trakt & Simkl)',
     description: isConfigured
       ? 'Syncs Trakt and Simkl Watchlists, Continue Watching, and History to Stremio and Nuvio across all devices without account logouts.'
@@ -744,7 +744,12 @@ async function handleCatalog(catalogId, type, extraSegment, config, defaultClien
   // Handle Trakt Catalogs
   const token = config.traktToken || config.token;
   const clientId = config.traktClientId || config.clientId || defaultClientId;
-  if (!token || !clientId) return [];
+  if (!token || !clientId) {
+    console.warn(`[Trakt Catalog] Missing credentials: token=${!!token}, clientId=${!!clientId}, catalog=${catalogId}`);
+    const empty = [];
+    empty.traktStatus = !token ? 'no_token' : 'no_client_id';
+    return empty;
+  }
 
   let endpoint = '';
   if (catalogId === 'trakt_playback_movies') endpoint = '/sync/playback/movies?extended=full';
@@ -757,6 +762,7 @@ async function handleCatalog(catalogId, type, extraSegment, config, defaultClien
   else if (catalogId === 'trakt_collection_series') endpoint = `/sync/collection/shows?extended=full&page=${page}&limit=20`;
   if (!endpoint) return [];
 
+  console.log(`[Trakt Request] ${endpoint}`);
   const res = await fetch(`${TRAKT_API_URL}${endpoint}`, {
     headers: {
       'Content-Type': 'application/json',
@@ -767,9 +773,23 @@ async function handleCatalog(catalogId, type, extraSegment, config, defaultClien
       'Authorization': `Bearer ${token}`
     }
   });
-  if (!res.ok) return [];
+
+  console.log(`[Trakt Response] ${endpoint} -> HTTP ${res.status}`);
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    console.error(`[Trakt API Error] ${endpoint} -> ${res.status}: ${errText.slice(0, 150)}`);
+    const empty = [];
+    empty.traktStatus = `http_${res.status}`;
+    return empty;
+  }
   const data = await res.json().catch(() => null);
-  if (!Array.isArray(data)) return [];
+  if (!Array.isArray(data)) {
+    console.error(`[Trakt Data Error] ${endpoint} -> response not an array`);
+    const empty = [];
+    empty.traktStatus = 'not_array';
+    return empty;
+  }
 
   let items = [];
   if (catalogId === 'trakt_playback_series' || catalogId === 'trakt_history_series') {
@@ -2439,7 +2459,13 @@ export default {
 
         let cached = await cache.match(cacheKey);
         if (cached) {
-          return cached;
+          try {
+            const cachedClone = cached.clone();
+            const cachedData = await cachedClone.json();
+            if (cachedData && Array.isArray(cachedData.metas) && cachedData.metas.length > 0) {
+              return cached;
+            }
+          } catch (_) {}
         }
 
         const type = routeParts[1];
@@ -2450,15 +2476,27 @@ export default {
         if (!config) return jsonResponse({ metas: [] });
         const metas = await handleCatalog(catalogId, type, extraSegment, config, traktClientId, simklClientId);
         
+        const hasItems = Array.isArray(metas) && metas.length > 0;
+        const cacheControl = hasItems
+          ? 'public, max-age=300, stale-while-revalidate=600'
+          : 'no-cache, no-store, must-revalidate';
+
+        console.log(`[Catalog Result] ${catalogId} (${type}) -> ${metas.length} items (traktStatus: ${metas.traktStatus || 'n/a'})`);
+
+        const headers = {
+          ...CORS_HEADERS,
+          'Cache-Control': cacheControl
+        };
+        if (metas && metas.traktStatus) {
+          headers['X-Trakt-Status'] = metas.traktStatus;
+        }
+
         const response = new Response(JSON.stringify({ metas }), {
           status: 200,
-          headers: {
-            ...CORS_HEADERS,
-            'Cache-Control': 'public, max-age=300, stale-while-revalidate=600'
-          }
+          headers
         });
 
-        if (ctx && ctx.waitUntil) {
+        if (hasItems && ctx && ctx.waitUntil) {
           ctx.waitUntil(cache.put(cacheKey, response.clone()));
         }
 
