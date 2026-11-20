@@ -161,7 +161,7 @@ function buildManifest(config) {
 
   return {
     id: 'org.multisync.stremio',
-    version: '2.6.1',
+    version: '2.6.2',
     name: 'MultiSync (Trakt & Simkl)',
     description: isConfigured
       ? 'Syncs Trakt and Simkl Watchlists, Continue Watching, and History to Stremio and Nuvio across all devices without account logouts.'
@@ -173,14 +173,12 @@ function buildManifest(config) {
       {
         name: 'meta',
         types: ['movie', 'series'],
-        idPrefixes: ['tt', 'trakt', 'simkl', 'tmdb', 'kitsu']
+        idPrefixes: ['simkl:']
       },
-      'subtitles',
-      { name: 'player', types: ['movie', 'series'], idPrefixes: ['tt', 'trakt', 'simkl', 'tmdb'] },
-      { name: 'library', types: ['movie', 'series'], idPrefixes: ['tt', 'trakt', 'simkl', 'tmdb'] }
+      'subtitles'
     ],
     types: ['movie', 'series'],
-    idPrefixes: ['tt', 'trakt', 'simkl', 'tmdb', 'kitsu'],
+    idPrefixes: ['tt', 'trakt', 'simkl'],
     catalogs,
     behaviorHints: {
       configurable: true,
@@ -205,10 +203,13 @@ const CORS_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8'
 };
 
-function jsonResponse(data, status = 200) {
+function jsonResponse(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: CORS_HEADERS
+    headers: {
+      ...CORS_HEADERS,
+      ...extraHeaders
+    }
   });
 }
 
@@ -2264,7 +2265,9 @@ export default {
         (potentialConfig && routeParts.length === 0);
 
       if (isManifest) {
-        return jsonResponse(buildManifest(config));
+        return jsonResponse(buildManifest(config), 200, {
+          'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400'
+        });
       }
 
       // Subtitles Hook (SyncriBullet Proven Dynamic Sync on Playback Start)
@@ -2313,11 +2316,17 @@ export default {
             const data = await res.json().catch(() => null);
             if (data) {
               const meta = mapSimklToMeta(data, type);
-              if (meta) return jsonResponse({ meta });
+              if (meta) {
+                return jsonResponse({ meta }, 200, {
+                  'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800'
+                });
+              }
             }
           }
         }
-        return jsonResponse({ meta: null });
+        return jsonResponse({ meta: null }, 200, {
+          'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800'
+        });
       }
 
       // Player Event Dispatcher (Real-time Playback Tracking: start, pause, stop)

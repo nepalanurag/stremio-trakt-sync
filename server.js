@@ -167,7 +167,7 @@ function buildManifest(config) {
 
   return {
     id: 'org.multisync.stremio',
-    version: '2.6.1',
+    version: '2.6.2',
     name: 'MultiSync (Trakt & Simkl)',
     description: 'Syncs Trakt and Simkl Watchlists, Continue Watching, and History to Stremio and Nuvio across all devices without account logouts.',
     logo: 'https://raw.githubusercontent.com/nepalanurag/stremio-trakt-sync/main/icon.svg',
