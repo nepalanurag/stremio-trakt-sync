@@ -166,9 +166,9 @@ function buildManifest(config) {
   }
 
   return {
-    id: 'org.syncribullet.multisync',
-    version: '2.4.0',
-    name: 'Trakt Multi-Device Sync',
+    id: 'org.multisync.stremio',
+    version: '2.6.1',
+    name: 'MultiSync (Trakt & Simkl)',
     description: 'Syncs Trakt and Simkl Watchlists, Continue Watching, and History to Stremio and Nuvio across all devices without account logouts.',
     logo: 'https://raw.githubusercontent.com/nepalanurag/stremio-trakt-sync/main/icon.svg',
     background: 'https://images.metahub.space/background/medium/tt0903747/img',
@@ -365,8 +365,8 @@ async function handleCatalog(catalogId, type, extraSegment, config) {
   else if (catalogId === 'trakt_playback_series') endpoint = '/sync/playback/episodes?extended=full';
   else if (catalogId === 'trakt_watchlist_movies') endpoint = `/sync/watchlist/movies?extended=full&page=${page}&limit=${limit}`;
   else if (catalogId === 'trakt_watchlist_series') endpoint = `/sync/watchlist/shows?extended=full&page=${page}&limit=${limit}`;
-  else if (catalogId === 'trakt_history_movies') endpoint = `/sync/history/movies?extended=full&page=${page}&limit=${limit}`;
-  else if (catalogId === 'trakt_history_series') endpoint = `/sync/history/shows?extended=full&page=${page}&limit=${limit}`;
+  else if (catalogId === 'trakt_history_movies') endpoint = `/sync/history/movies?extended=full&page=${page}&limit=50`;
+  else if (catalogId === 'trakt_history_series') endpoint = `/sync/history/episodes?extended=full&page=${page}&limit=50`;
   else if (catalogId === 'trakt_collection_movies') endpoint = `/sync/collection/movies?extended=full&page=${page}&limit=${limit}`;
   else if (catalogId === 'trakt_collection_series') endpoint = `/sync/collection/shows?extended=full&page=${page}&limit=${limit}`;
   if (!endpoint) return [];
@@ -374,12 +374,23 @@ async function handleCatalog(catalogId, type, extraSegment, config) {
   const data = await fetchTrakt(endpoint, token, clientId);
   let items = [];
 
-  if (catalogId === 'trakt_playback_series') {
+  if (catalogId === 'trakt_playback_series' || catalogId === 'trakt_history_series') {
     const seen = new Set();
     for (const item of data) {
-      if (item.show?.ids?.trakt && !seen.has(item.show.ids.trakt)) {
-        seen.add(item.show.ids.trakt);
+      const showId = item.show?.ids?.trakt || item.show?.ids?.imdb;
+      if (showId && !seen.has(showId)) {
+        seen.add(showId);
         const meta = mapToMeta(item, 'series');
+        if (meta) items.push(meta);
+      }
+    }
+  } else if (catalogId === 'trakt_history_movies') {
+    const seen = new Set();
+    for (const item of data) {
+      const movieId = item.movie?.ids?.trakt || item.movie?.ids?.imdb;
+      if (movieId && !seen.has(movieId)) {
+        seen.add(movieId);
+        const meta = mapToMeta(item, 'movie');
         if (meta) items.push(meta);
       }
     }
@@ -387,7 +398,8 @@ async function handleCatalog(catalogId, type, extraSegment, config) {
     items = data.map(i => mapToMeta(i, type)).filter(Boolean);
   }
 
-  if (selectedGenre) {
+  const isAllGenre = !selectedGenre || ['all', 'all genres', 'all-genres'].includes(selectedGenre) || selectedGenre.startsWith('all');
+  if (!isAllGenre) {
     items = items.filter(item =>
       Array.isArray(item.genres) &&
       item.genres.some(g => g.toLowerCase().includes(selectedGenre))
